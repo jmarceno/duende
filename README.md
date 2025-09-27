@@ -1,5 +1,9 @@
 # Duende Programming Language
 
+
+# Disclamer
+Duende is not yet fully functional and you may enconter issues trying to compile programs that goes beyond what is demostratate at the examples folder.
+
 <p align="center">
   <img src="duende-logo.svg" alt="Duende Logo" width="200"/>
 </p>
