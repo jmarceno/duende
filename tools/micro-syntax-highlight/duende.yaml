@@ -1,0 +1,63 @@
+filetype: duende
+
+detect:
+    filename: "(\\.(du|DU)$|\\.(duende|DUENDE)$)"
+
+rules:
+    # Statements and keywords
+    - statement: "\\b(let|var|if|elif|else|match|do|end|for|in|while|return|try|panic|defer|import|as|public|private|struct|frame|enum|protocol)\\b"
+
+    # Types
+    - type: "\\b(int|float|string|bool|bytes|void|list|dict|auto)\\b"
+
+    # Builtins and constants
+    - constant.bool: "\\b(true|false)\\b"
+    - constant: "\\b(Ok|Error|Some|None|Result|Maybe|this)\\b"
+
+    # Numbers
+    - constant.number: "\\b[0-9]+(\\.[0-9]+)?\\b"
+
+    # Function identifiers (matched along with the opening parenthesis)
+    - identifier: "\\b[a-zA-Z_][a-zA-Z0-9_]*\\s*\\("
+
+    # Operators and punctuation
+    - symbol.operator: '[-=:+*/%<>!&|^~]'
+    - symbol.brackets: '[(){}\[\],.]'
+
+    # Strings: triple-quoted (must be listed before double-quoted)
+    - constant.string:
+        start: '"""'
+        end: '"""'
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+
+    # Strings: byte-prefixed
+    - constant.string:
+        start: "b\""
+        end: "\""
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+
+    # Strings: double-quoted
+    - constant.string:
+        start: "\""
+        end: "\""
+        skip: "\\\\."
+        rules:
+            - constant.specialChar: "\\\\."
+
+    # Comments: single-line
+    - comment:
+        start: "//"
+        end: "$"
+        rules:
+            - todo: "(TODO|FIXME|XXX):?"
+
+    # Comments: multi-line
+    - comment:
+        start: "/\\*"
+        end: "\\*/"
+        rules:
+            - todo: "(TODO|FIXME|XXX):?"
