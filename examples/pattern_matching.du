@@ -1,0 +1,82 @@
+enum Status do
+    ACTIVE,
+    INACTIVE,
+    PENDING
+end
+
+Result<Status> checkStatus(Status stat, int value) do
+    var Status s = ACTIVE  // Initialize with a default value
+    
+    match stat do // If you are checking an enum, you should check all cases OR have a default case, otherwise we emit a compilation error
+        ACTIVE if value > 0 -> s = ACTIVE
+        ACTIVE if value < 0 -> return Error("Invalid value for active")
+        INACTIVE -> s = INACTIVE
+        PENDING -> s = PENDING
+    end
+
+    return Ok(s)
+end
+
+string describe(int x) do
+    return match x do
+        0 -> "zero"
+        1 -> "one"
+        _ -> "many"
+    end
+end
+
+Result<string> process_data(string data) do
+    return match data do
+        "This should be OK!" -> Ok("success")
+        "This should NOT be OK!" -> Error(data)
+        _ -> Error("unknown data")
+    end
+end
+
+Result<string> checkData(Result<string> content) do
+    return match content do // Pattern match on Result.
+          Ok(data) -> process_data(data)
+          Error(msg) -> Error("failed to read: ${msg}")
+     end
+end
+    
+
+void main() do
+    
+    let Result<Status> res = checkStatus(Status.ACTIVE, -1)
+    let string val = res ? else "error"
+    print(val)
+
+    let Result<Status> res2 = checkStatus(Status.ACTIVE, 1)
+    let string val2 = res2 ? else "error"
+    print(val2)
+
+    let Result<Status> res3 = checkStatus(Status.INACTIVE, 1)
+    let string val3 = res3 ? else "error"
+    print(val3)
+    
+    let string email = "test@email.com"
+    match email do
+        regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$") -> print("This looks like an email")
+        _ -> print("This does not look like an email")
+    end
+    
+    var list<int> numbers = [1, 2, 3, 4, 5]
+    match 1 do
+        numbers[0] -> print("First number is 1")
+        _ -> print("This should not print")
+    end
+
+    var dict colors = {"red": "stop", "green": "go", "yellow": "caution"}
+    match colors["red"] do
+        "stop" -> print("Stop the car")
+        "go" -> print("Go ahead")
+        _ -> print("Unknown signal")
+    end
+
+    checkData(Ok("This should be OK!"))
+    checkData(Error("This should NOT be OK!"))
+    print(describe(0))
+    print(describe(1))
+    print(describe(42))
+end

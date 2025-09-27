@@ -1,0 +1,72 @@
+// String features demo: interpolation with formats and common string API
+
+int main() do
+    let string name = "Duende"
+    let int score = 95
+    let float ratio = 1.0 / 3.0
+
+    // Interpolation with default and format specifiers
+    print("Hello ${name}! Score=${score}, ratio=${ratio|%.2f}")
+
+    // Manipulation
+    let list<string> parts = "a,b,c".split(",")
+    print(parts.join("-"))
+    print("Hello World".replace("World", "Duende"))
+    print("hello".toUpperCase())
+    print("HELLO".toLowerCase())
+    print("  trim me  ".trim())
+    print("abcdef".substring(2, 5))
+
+    // Searching
+    print("foobar".indexOf("o"))           // 1
+    print("foobar".lastIndexOf("o"))      // 2
+    print("foobar".startsWith("foo"))     // true
+    print("foobar".endsWith("bar"))       // true
+    print("foobar".contains("oba"))       // true
+    print("foo123".matches(regex("\\d+"))) // true
+
+    // Conversion and encoding
+    print("42".toInt())
+    print("3.14".toFloat())
+    print("true".toBool())
+    let bytes b = "hi".toBytes()
+    print(fromBytes(b))
+
+    // Comparison and formatting helpers
+    print("abc".compare("abd"))   // -1
+    print("abc".equals("abc"))    // true
+    print("abc".notEquals("abd")) // true
+    print("Value: %04d".format(7))
+    print("%.1f".formatNumber(2.56))
+
+    // Utilities
+    print("".isEmpty())
+    print("xyz".length())
+    print("xyz".charAt(1))
+    print("xyz".charCodeAt(1))
+
+    // Iteration (simple map to codes and filter using contains)
+    let list<string> codes = ["a", "b"]
+    print(codes.join(","))
+    print("b")
+
+    // Escaping inside interpolation: \\ for backslash, \${ for literal "${", and \} for literal "}"
+    print("Escaped: \\")              // prints a single backslash
+    print("Literal: \${name} and \}")    // prints literal "${name}" and "}"
+    print("Mix: \${name} -> ${name}")     // combines literal and real interpolation
+
+    // Single-quoted string also supports the same escapes
+    print('Singles: \\ and \} and \${ ok')
+
+    
+    for i in 1..5 do
+        if i == 3 do
+            continue
+        end
+        print(i)
+        if i == 4 do
+            break
+        end
+    end
+
+end

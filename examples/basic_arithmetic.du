@@ -1,0 +1,12 @@
+let int x = 1 + 2 * 3
+let float y = 3.5
+print(x)
+print(y)
+
+// Modulo operator examples
+let int m1 = 10 % 3
+let int m2 = 25 % 7
+let int m3 = 8 % 2
+print(m1)
+print(m2)
+print(m3)

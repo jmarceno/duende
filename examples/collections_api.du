@@ -1,0 +1,61 @@
+// Tests new list and dictionary field access and basic methods
+
+int main() do
+    // Test list field access
+    let list<int> numbers = [1, 2, 3, 4, 5]
+    print("List length: ${numbers.length}")
+    print("List empty: ${numbers.empty}")
+    let int numbers_first_res = numbers.first
+    let string numbers_first_val = numbers_first_res
+    print("List first: ${numbers_first_val}")
+    let int numbers_last_res = numbers.last
+    let string numbers_last_val = numbers_last_res
+    print("List last: ${numbers_last_val}")
+    
+    // Test list slice method
+    let list<int> slice = numbers.slice(1, 4)
+    print("Slice length: ${slice.length}")
+    let int slice_first_res = slice.first
+    let string slice_first_val = slice_first_res
+    print("Slice first: ${slice_first_val}")
+
+    // Test list sort method (in-place)
+    var list<string> unsorted = ["b", "a", "c"]
+    unsorted.sort()
+    let string first_sorted = unsorted.first
+    let string last_sorted = unsorted.last
+    print("Sorted first: ${first_sorted}")
+    print("Sorted last: ${last_sorted}")
+    
+    // Test list add method
+    var list<int> mutable_list = [10, 20]
+    print("Before add: ${mutable_list.length}")
+    mutable_list.add(30)
+    print("After add: ${mutable_list.length}")
+    let int added_last_res = mutable_list.last
+    let string added_last_val = added_last_res
+    print("Added last: ${added_last_val}")
+    
+    // Test dictionary field access
+    let dict config = {"host": "localhost", "port": 8080, "debug": true}
+    print("Dict length: ${config.length}")
+    print("Dict empty: ${config.empty}")
+    
+    // Test dictionary keys and values
+    let list<string> keys = config.keys
+    let list<string> values = config.values
+    print("Keys length: ${keys.length}")
+    print("Values length: ${values.length}")
+    
+    // Test empty collections
+    let list<string> empty_list = []
+    print("Empty list length: ${empty_list.length}")
+    print("Empty list empty: ${empty_list.empty}")
+    let string empty_first_res = empty_list.first
+    let string empty_first_val = empty_first_res
+    print("Empty list first: ${empty_first_val}")
+    
+    let dict empty_dict = {}
+    print("Empty dict length: ${empty_dict.length}")
+    print("Empty dict empty: ${empty_dict.empty}")
+end

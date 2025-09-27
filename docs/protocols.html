@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Protocols — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Protocols</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="structs-frames.html">Structs & Frames</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Definition</h2>
+      <p>Protocols define required methods, and can provide default method implementations.</p>
+      <pre><code>protocol Greeter do
+  string greet(string name)
+
+  int testFunc()
+
+  string defaultGreet(string name) do
+    return "Hello ${name}"
+  end
+end
+</code></pre>
+
+      <h2>Implementation</h2>
+      <p>Use the <code>@Implements(Name)</code> annotation on a frame or struct.</p>
+      <pre><code>@Implements(Greeter)
+frame ConsoleGreeter do
+  string greet(string name) do
+    return "Hello, ${name}"
+  end
+
+  int testFunc() do
+    return 0
+  end
+end
+
+@Implements(Greeter)
+struct ConsoleStructGreeter do
+  string greet(string name) do
+    return "Hello, ${name}"
+  end
+
+  int testFunc() do
+    return 0
+  end
+end
+
+var ConsoleGreeter g = ConsoleGreeter()
+print(g.greet("World"))
+
+let ConsoleStructGreeter sg = ConsoleStructGreeter()
+print(sg.defaultGreet("Foo"))
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="structs-frames.html">Structs & Frames</a>, <a href="functions.html">Functions</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

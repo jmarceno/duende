@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Collections — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Collections</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="strings.html">Strings</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Available methods</h2>
+      <ul>
+        <li>Lists
+          <ul>
+            <li><code>add(x: any)</code></li>
+            <li><code>slice(start: int, end: int) -&gt; list&lt;T&gt;</code></li>
+            <li><code>length</code> property and <code>length()</code> method</li>
+            <li><code>empty</code> property</li>
+            <li><code>first</code> / <code>last</code> properties (return -1 or "-1" for strings when empty)</li>
+            <li><code>sort()</code> (in-place, lexicographic)</li>
+            <li><code>join(sep: string) -&gt; string</code></li>
+          </ul>
+        </li>
+        <li>Dictionaries
+          <ul>
+            <li><code>has(key: string) -&gt; bool</code></li>
+            <li><code>length</code> property and <code>empty</code> property</li>
+            <li><code>keys -&gt; list&lt;string&gt;</code>, <code>values -&gt; list&lt;string&gt;</code></li>
+            <li><code>items() -&gt; list&lt;{key:string, value:string}&gt;</code></li>
+          </ul>
+        </li>
+      </ul>
+      <h2>Lists</h2>
+  <pre><code>var list&lt;int&gt; numbers = [1, 2, 3, 4, 5]
+numbers.add(6)
+let int first = numbers[0]
+print(numbers.length)
+print(numbers.empty)
+let list&lt;int&gt; slice = numbers.slice(1, 4)
+let numbers_first = numbers.first
+let numbers_last = numbers.last
+// In-place sort (lexicographic)
+var list&lt;string&gt; names = ["bob", "alice", "carol"]
+names.sort()
+print(names.first) // "alice"
+print(names.last)  // "carol"
+</code></pre>
+
+      <h2>Dictionaries</h2>
+      <pre><code>var dict config = {"host": "localhost", "port": 8080}
+if config.has("port") do
+    let int port = config["port"]
+end
+
+print(config.length)
+print(config.empty)
+let list&lt;string&gt; keys = config.keys
+let list&lt;string&gt; values = config.values
+</code></pre>
+
+  <h2>Empty collections</h2>
+  <pre><code>let list&lt;string&gt; xs = []
+let dict d = {}
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="strings.html">Strings</a>, <a href="bytes.html">Bytes</a>, <a href="pattern-matching.html">Pattern Matching</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,6 @@
+import imports_cases.wildcard.a.*
+
+int main() do
+    print(foo())
+    print(bar())
+end

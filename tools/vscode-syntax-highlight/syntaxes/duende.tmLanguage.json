@@ -1,0 +1,497 @@
+{
+    "name": "Duende",
+    "scopeName": "source.duende",
+    "fileTypes": ["du", "duende"],
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#annotations"
+        },
+        {
+            "include": "#type-declaration"
+        },
+        {
+            "include": "#control-keywords"
+        },
+        {
+            "include": "#declaration-keywords"
+        },
+        {
+            "include": "#storage-types"
+        },
+        {
+            "include": "#builtin-functions"
+        },
+        {
+            "include": "#constants"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#regex-literals"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#function-calls"
+        },
+        {
+            "include": "#type-references"
+        },
+        {
+            "include": "#field-access"
+        },
+        {
+            "include": "#variables"
+        },
+        {
+            "include": "#operators"
+        },
+        {
+            "include": "#punctuation"
+        }
+    ],
+    "repository": {
+        "comments": {
+            "patterns": [
+                {
+                    "name": "comment.block.duende",
+                    "begin": "/\\*\\*",
+                    "end": "\\*/"
+                },
+                {
+                    "name": "comment.block.duende", 
+                    "begin": "/\\*(?!\\*)",
+                    "end": "\\*/"
+                },
+                {
+                    "name": "comment.line.double-slash.duende",
+                    "match": "//.*$"
+                }
+            ]
+        },
+        "annotations": {
+            "patterns": [
+                {
+                    "name": "meta.annotation.duende",
+                    "begin": "@",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "entity.name.function.duende"
+                        }
+                    },
+                    "end": "(?=\\s|\\n|$|\\()",
+                    "patterns": [
+                        {
+                            "name": "entity.name.function.duende",
+                            "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+                        }
+                    ]
+                }
+            ]
+        },
+        
+        "type-declaration": {
+            "patterns": [
+                {
+                    "name": "meta.type.declaration.duende",
+                    "match": "\\b(struct|enum|frame|protocol)\\s+([A-Z][a-zA-Z0-9_]*)\\b",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.declaration.type.duende"
+                        },
+                        "2": {
+                            "name": "entity.name.type.declaration.duende"
+                        }
+                    }
+                }
+            ]
+        },
+        "control-keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.conditional.duende",
+                    "match": "\\b(if|else|match|elif)\\b"
+                },
+                {
+                    "name": "keyword.control.loop.duende",
+                    "match": "\\b(while|for|in)\\b"
+                },
+                {
+                    "name": "keyword.control.flow.duende",
+                    "match": "\\b(return|break|continue|defer)\\b"
+                },
+                {
+                    "name": "keyword.control.block.duende",
+                    "match": "\\b(do|end)\\b"
+                }
+            ]
+        },
+        "declaration-keywords": {
+            "patterns": [
+                {
+                    "name": "storage.modifier.declaration.duende",
+                    "match": "\\b(let|var)\\b"
+                },
+                {
+                    "name": "keyword.other.import.duende",
+                    "match": "\\b(import)\\b"
+                }
+            ]
+        },
+        "storage-types": {
+            "patterns": [
+                {
+                    "name": "storage.type.primitive.duende",
+                    "match": "\\b(auto|int|float|string|bool|void|bytes)\\b"
+                },
+                {
+                    "name": "storage.type.collection.duende",
+                    "match": "\\b(list|dict)\\b"
+                }
+            ]
+        },
+        "builtin-functions": {
+            "patterns": [
+                {
+                    "name": "support.function.builtin.duende",
+                    "match": "\\b(print|println|error|warn|debug|input)\\b"
+                },
+                {
+                    "name": "support.function.constructor.duende",
+                    "match": "\\b(list|dict)(?=\\s*\\()"
+                }
+            ]
+        },
+        "constants": {
+            "patterns": [
+                {
+                    "name": "constant.language.boolean.duende",
+                    "match": "\\b(true|false)\\b"
+                },
+                {
+                    "name": "constant.language.this.duende",
+                    "match": "\\b(this)\\b"
+                },
+                {
+                    "name": "constant.language.result.duende",
+                    "match": "\\b(Ok|Error|Maybe|Some|Result)\\b"
+                }
+            ]
+        },
+        "strings": {
+            "patterns": [
+                {
+                    "name": "string.quoted.triple.duende",
+                    "begin": "\"\"\"",
+                    "end": "\"\"\"",
+                    "patterns": [
+                        {
+                            "include": "#string-interpolation"
+                        },
+                        {
+                            "name": "constant.character.escape.duende",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.double.duende",
+                    "begin": "\"",
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "include": "#string-interpolation"
+                        },
+                        {
+                            "name": "constant.character.escape.duende",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "name": "string.quoted.bytes.duende",
+                    "begin": "\\bb\"",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "storage.type.string.bytes.duende"
+                        }
+                    },
+                    "end": "\"",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.duende",
+                            "match": "\\\\."
+                        }
+                    ]
+                }
+            ]
+        },
+        "regex-literals": {
+            "patterns": [
+                {
+                    "name": "string.regexp.duende",
+                    "begin": "\\bregex\"",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "support.other.regex.duende"
+                        }
+                    },
+                    "end": "\"",
+                    "endCaptures": {
+                        "0": {
+                            "name": "support.other.regex.duende"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.duende",
+                            "match": "\\\\."
+                        }
+                    ]
+                }
+            ]
+        },
+        "string-interpolation": {
+            "patterns": [
+                {
+                    "name": "meta.embedded.expression.duende",
+                    "begin": "\\$\\s*\\{",
+                    "end": "\\}",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "punctuation.definition.template-expression.begin.duende"
+                        }
+                    },
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.definition.template-expression.end.duende"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "#string-interpolation"
+                        },
+                        {
+                            "include": "#function-calls"
+                        },
+                        {
+                            "include": "#field-access"
+                        },
+                        {
+                            "include": "#variables"
+                        },
+                        {
+                            "include": "#operators"
+                        },
+                        {
+                            "include": "#numbers"
+                        },
+                        {
+                            "include": "#strings"
+                        },
+                        {
+                            "include": "#constants"
+                        }
+                    ]
+                },
+                {
+                    "name": "meta.embedded.expression.duende",
+                    "begin": "\\$\\{",
+                    "end": "\\}",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "punctuation.definition.template-expression.begin.duende"
+                        }
+                    },
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.definition.template-expression.end.duende"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "#string-interpolation"
+                        },
+                        {
+                            "include": "#function-calls"
+                        },
+                        {
+                            "include": "#field-access"
+                        },
+                        {
+                            "include": "#variables"
+                        },
+                        {
+                            "include": "#operators"
+                        },
+                        {
+                            "include": "#numbers"
+                        },
+                        {
+                            "include": "#strings"
+                        },
+                        {
+                            "include": "#constants"
+                        }
+                    ]
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.float.duende",
+                    "match": "\\b\\d+\\.\\d+\\b"
+                },
+                {
+                    "name": "constant.numeric.integer.duende",
+                    "match": "\\b\\d+\\b"
+                }
+            ]
+        },
+        "function-calls": {
+            "patterns": [
+                {
+                    "name": "meta.function-call.duende",
+                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+                    "captures": {
+                        "1": {
+                            "name": "entity.name.function.call.duende"
+                        }
+                    }
+                }
+            ]
+        },
+        "type-references": {
+            "patterns": [
+                {
+                    "name": "entity.name.type.reference.duende",
+                    "match": "\\b[A-Z][a-zA-Z0-9_]*\\b(?!\\s*\\()"
+                }
+            ]
+        },
+        "field-access": {
+            "patterns": [
+                {
+                    "name": "meta.field-access.duende",
+                    "match": "\\.\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\b(?!\\s*\\()",
+                    "captures": {
+                        "1": {
+                            "name": "variable.other.property.duende"
+                        }
+                    }
+                }
+            ]
+        },
+        "variables": {
+            "patterns": [
+                {
+                    "name": "variable.other.constant.duende",
+                    "match": "\\b[A-Z][A-Z0-9_]*\\b"
+                },
+                {
+                    "name": "variable.parameter.duende",
+                    "match": "(?<=\\(|,)\\s*([a-z_][a-zA-Z0-9_]*)\\s*:",
+                    "captures": {
+                        "1": {
+                            "name": "variable.parameter.duende"
+                        }
+                    }
+                },
+                {
+                    "name": "variable.other.duende",
+                    "match": "\\b[a-z_][a-zA-Z0-9_]*\\b"
+                }
+            ]
+        },
+        "operators": {
+            "patterns": [
+                {
+                    "name": "keyword.operator.assignment.compound.duende",
+                    "match": "(\\+=|\\-=|\\*=|\\/=|%=)"
+                },
+                {
+                    "name": "keyword.operator.assignment.duende",
+                    "match": "(?<![=!<>])=(?![=])"
+                },
+                {
+                    "name": "keyword.operator.comparison.duende",
+                    "match": "(==|!=|<=|>=|<|>)"
+                },
+                {
+                    "name": "keyword.operator.logical.duende",
+                    "match": "(\\|\\||&&|!)"
+                },
+                {
+                    "name": "keyword.operator.arithmetic.increment.duende",
+                    "match": "(\\+\\+|--)"
+                },
+                {
+                    "name": "keyword.operator.arithmetic.duende",
+                    "match": "[+\\-*/%]"
+                },
+                {
+                    "name": "keyword.operator.arrow.duende",
+                    "match": "->"
+                },
+                {
+                    "name": "keyword.operator.safe-unwrap.duende",
+                    "match": "\\?\\s+else\\b"
+                },
+                {
+                    "name": "keyword.operator.range.duende",
+                    "match": "\\.\\."
+                },
+                {
+                    "name": "punctuation.accessor.duende",
+                    "match": "\\."
+                },
+                {
+                    "name": "punctuation.separator.type.duende",
+                    "match": ":"
+                }
+            ]
+        },
+        "punctuation": {
+            "patterns": [
+                {
+                    "name": "punctuation.section.block.begin.duende",
+                    "match": "\\{"
+                },
+                {
+                    "name": "punctuation.section.block.end.duende",
+                    "match": "\\}"
+                },
+                {
+                    "name": "punctuation.section.brackets.begin.duende",
+                    "match": "\\["
+                },
+                {
+                    "name": "punctuation.section.brackets.end.duende",
+                    "match": "\\]"
+                },
+                {
+                    "name": "punctuation.section.parens.begin.duende",
+                    "match": "\\("
+                },
+                {
+                    "name": "punctuation.section.parens.end.duende",
+                    "match": "\\)"
+                },
+                {
+                    "name": "punctuation.separator.comma.duende",
+                    "match": ","
+                },
+                {
+                    "name": "punctuation.terminator.statement.duende",
+                    "match": ";"
+                }
+            ]
+        }
+    }
+}

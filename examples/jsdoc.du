@@ -1,0 +1,23 @@
+/**
+ * Example demonstrating JSDoc-style comments in Duende.
+ * For now, these comments are ignored by the parser and have no effect.
+ */
+
+/**
+ * Adds two integers and returns the sum.
+ * @param {int} a - First addend.
+ * @param {int} b - Second addend.
+ * @returns {int} Sum of a and b.
+ */
+int add(int a, int b) do
+    return a + b
+end
+
+/**
+ * Program entry point.
+ * @returns {int} Exit code (unused in this example).
+ */
+int main() do
+    let int s = add(2, 3)
+    print(s)
+end

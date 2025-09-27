@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>defer — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>defer</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="functions.html">Functions</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p><code>defer</code> schedules a function call to run when the current scope exits.</p>
+      <pre><code>void exitPrint() do
+    print("This should be the last thing to print")
+end
+
+int main() do
+    defer exitPrint()
+    print("This should be first thing to print")
+    return 0
+end
+</code></pre>
+      <div class="see-also">
+        See also: <a href="functions.html">Functions</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

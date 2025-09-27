@@ -1,0 +1,16 @@
+// Boolean operator demo: !, &&, || only (no 'not', 'and', 'or')
+
+let bool a = true
+let bool b = false
+
+print(!a)          // false
+print(!b)          // true
+print(a && b)      // false
+print(a || b)      // true
+
+// Mixed with comparisons
+print(!(1 == 1))   // false
+print(!(1 != 1))   // true
+
+// Combined logic
+print(!(a && b) && (a || b))  // true

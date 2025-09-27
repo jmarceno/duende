@@ -1,0 +1,10 @@
+
+void exitPrint() do
+    print("This should be the last thing to print")
+end
+
+int main() do
+    defer exitPrint()
+    print("This should be first thing to print")
+    return 0
+end

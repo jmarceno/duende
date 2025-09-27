@@ -1,0 +1,43 @@
+import std.async
+import std.networking
+
+// Demonstrate async scheduler with multiple spawned tasks and networking
+int main() do
+  let int port = 9101
+
+  // Start a one-shot echo server in background D thread
+  var auto listener = tcpListen(port)
+  spawnEchoOnce(listener)
+
+  // Spawn a periodic ticker task (just sleeps asynchronously)
+  spawn({ n -> tickerTask() })
+
+  // Spawn the networking client task
+  spawn({ n -> clientTask(port) })
+
+  // Run the scheduler until all tasks complete
+  run()
+
+  // Close listener after usage
+  tcpClose(listener)
+  return 0
+end
+
+int tickerTask() do
+  // This executes inside a fiber
+  sleepAsync(2)
+  return 0
+end
+
+int clientTask(int port) do
+  var auto c = tcpConnect("127.0.0.1", port)
+  tcpSend(c, "hello", true)
+  // Allow other fibers to run before reading
+  yieldNow()
+  // Cooperatively wait for readability (non-blocking scheduler wait)
+  awaitReadable(c.sock.handle, 1000)
+  var string reply = tcpRecvLine(c)
+  print(reply)
+  tcpClose(c)
+  return 0
+end

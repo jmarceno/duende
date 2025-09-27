@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pattern Matching — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Pattern Matching</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="enums.html">Enums</a>
+        <a href="regex.html">Regex</a>
+        <a href="result-maybe.html">Result & Maybe</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Match statement</h2>
+      <pre><code>string describe(int x) do
+    return match x do
+        0 -> "zero"
+        1 -> "one"
+        _ -> "many"
+    end
+end
+</code></pre>
+
+      <h2>Guards</h2>
+      <pre><code>match stat do
+    ACTIVE if value &gt; 0 -> s = ACTIVE
+    ACTIVE if value &lt; 0 -> return Error("Invalid value for active")
+    INACTIVE -> s = INACTIVE
+    PENDING -> s = PENDING
+end
+</code></pre>
+
+      <h2>Enum coverage</h2>
+      <p>When matching an enum, cover all cases or include a default case; otherwise a compile error is emitted. See <a href="enums.html">Enums</a>.</p>
+
+      <h2>Regex pattern</h2>
+      <pre><code>match email do
+    regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$") -> print("Looks like email")
+    _ -> print("Not an email")
+end
+</code></pre>
+
+      <h2>Collections lookup patterns</h2>
+  <pre><code>var list&lt;int&gt; numbers = [1, 2, 3]
+match 1 do
+    numbers[0] -> print("First number is 1")
+end
+
+var dict colors = {"red": "stop"}
+match colors["red"] do
+    "stop" -> print("Stop the car")
+end
+</code></pre>
+
+      <h2>Matching Result</h2>
+      <pre><code>match content do
+    Ok(data) -> process_data(data)
+    Error(msg) -> Error("failed: ${msg}")
+end
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="result-maybe.html">Result & Maybe</a>, <a href="regex.html">Regex</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

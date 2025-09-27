@@ -1,0 +1,54 @@
+{
+    "name": "duende-code-highlight",
+    "displayName": "Duende Language Support",
+    "description": "Enhanced syntax highlighting for Duende programming language with rich color differentiation",
+    "version": "1.5.0",
+    "publisher": "duende-lang",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/jmarceno/duende"
+    },
+    "engines": {
+        "vscode": "^1.60.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "keywords": [
+        "duende",
+        "syntax",
+        "highlighting",
+        "jvm",
+        "language"
+    ],
+    "contributes": {
+        "languages": [
+            {
+                "id": "duende",
+                "aliases": [
+                    "Duende",
+                    "duende"
+                ],
+                "extensions": [
+                    ".du",
+                    ".duende"
+                ],
+                "configuration": "./language-configuration.json",
+                "icon": {
+                    "light": "duende-logo.svg",
+                    "dark": "duende-logo.svg"
+                }
+            }
+        ],
+        "grammars": [
+            {
+                "language": "duende",
+                "scopeName": "source.duende",
+                "path": "./syntaxes/duende.tmLanguage.json"
+            }
+        ]
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.60.0"
+    }
+}

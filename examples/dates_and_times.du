@@ -1,0 +1,50 @@
+// dates_and_times.du — Demonstrates date/time support, formatting, tz, comparisons, extraction, and pattern matching
+
+let auto today = now()
+let auto utc = utcNow()
+
+// Print ISO-like via formatter in interpolation
+print("Today: ${today|%F}")          // YYYY-MM-DD
+print("UTC: ${utc|%F %T%Z}")          // YYYY-MM-DD HH:MM:SSZ or +HH:MM
+
+// Construct specific date/time and format
+let auto bday = date(1990, 7, 6)
+let auto meetup = dateTime(2025, 5, 20, 18, 30, 0)
+print(formatDate(bday, "%F"))
+print(formatDate(meetup, "%F %T"))
+
+// Convert timezones: -03:00
+let auto meet_brt = toTZ(meetup, -3)
+print(formatDate(meet_brt, "%F %T%z"))
+
+// Field extraction
+print(year(bday))
+print(month(bday))
+print(day(bday))
+print(hour(meetup))
+print(minute(meetup))
+print(second(meetup))
+
+// Comparison and arithmetic
+let auto days = daysBetween(meetup, bday)
+print(days > 0)
+let auto inTwo = addDays(bday, 2)
+print(formatDate(inTwo, "%F"))
+
+// More arithmetic helpers
+let auto plusHours = addHours(meetup, 5)
+let auto plusMinutes = addMinutes(meetup, 90)
+let auto plusSeconds = addSeconds(meetup, 3661)
+print(formatDate(plusHours, "%F %T"))
+print(formatDate(plusMinutes, "%F %T"))
+print(formatDate(plusSeconds, "%F %T"))
+
+// Parsing
+let auto parsed = parseDate("2025-12-31T23:59:59")
+print(formatDate(parsed, "%F %T"))
+
+// Pattern matching on dates (compare equality)
+match parsed do
+    dateTime(2025, 12, 31, 23, 59, 59) -> print("NewYearEveEve")
+    _ -> print("other")
+end

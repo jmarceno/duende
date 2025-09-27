@@ -1,0 +1,38 @@
+// bytes builtin demo: literals, slicing, concatenation, len, iteration, methods, indexing
+let bytes data = [1, 2, 255]
+print(data.length)
+print(data[0] + data[1])
+print(data[2])
+
+// Literal and concatenation
+let bytes hello = b"hello"
+let bytes world = b" world"
+let bytes hw = hello + world
+print(fromBytes(hw))
+
+// Slicing
+let bytes slice = hello[1:4]
+print(fromBytes(slice))
+
+// len() builtin
+print(len(hello))
+
+// Iteration with break/continue
+var int sum = 0
+for b in hello do
+	if b == 0 do
+		continue
+	end
+	sum = sum + b
+	if sum > 1000 do
+		break
+	end
+end
+print(sum)
+
+// Methods upper/lower
+print(fromBytes(hello.upper()))
+print(fromBytes(hello.lower()))
+
+// find
+print(hello.find(b"l"))

@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE language SYSTEM "language.dtd">
+<language name="Duende" version="1.0" kateversion="5.0" section="Sources" extensions="*.du;*.duende" mimetype="text/x-duende" author="Duende Team" license="MIT">
+  <highlighting>
+    <list name="keywords">
+      <item>let</item>
+      <item>var</item>
+      <item>if</item>
+      <item>elif</item>
+      <item>else</item>
+      <item>break</item>
+      <item>continue</item>
+      <item>match</item>
+      <item>do</item>
+      <item>end</item>
+      <item>for</item>
+      <item>in</item>
+      <item>while</item>
+      <item>return</item>
+      <item>try</item>
+      <item>panic</item>
+      <item>import</item>
+      <item>as</item>
+      <item>public</item>
+      <item>private</item>
+      <item>struct</item>
+      <item>frame</item>
+      <item>enum</item>
+      <item>protocol</item>
+      <item>this</item>
+      <item>defer</item>
+    </list>
+    
+    <list name="types">
+      <item>int</item>
+      <item>float</item>
+      <item>string</item>
+      <item>bool</item>
+      <item>bytes</item>
+      <item>void</item>
+      <item>list</item>
+      <item>dict</item>
+      <item>auto</item>
+    </list>
+    
+    <list name="builtins">
+      <item>print</item>
+      <item>println</item>
+      <item>error</item>
+      <item>warn</item>
+      <item>debug</item>
+      <item>input</item>
+    </list>
+    
+    <list name="constants">
+      <item>true</item>
+      <item>false</item>
+      <item>Ok</item>
+      <item>Error</item>
+      <item>Some</item>
+      <item>None</item>
+      <item>Result</item>
+      <item>Maybe</item>
+    </list>
+
+    <contexts>
+      <context attribute="Normal Text" lineEndContext="#stay" name="Normal">
+        
+        <!-- Comments -->
+        <Detect2Chars attribute="Comment" context="CommentSingleLine" char="/" char1="/" />
+        <Detect2Chars attribute="Comment" context="CommentMultiLine" char="/" char1="*" />
+        
+        <!-- Strings -->
+        <DetectChar attribute="String" context="String" char="&quot;" />
+        <RegExpr attribute="String" context="ByteString" String="b&quot;" />
+        <RegExpr attribute="String" context="TripleString" String="&quot;&quot;&quot;" />
+        <RegExpr attribute="Regex" context="RegexString" String="regex&quot;" />
+        
+        <!-- Numbers -->
+        <Float attribute="Float" context="#stay" />
+        <Int attribute="Number" context="#stay" />
+        
+        <!-- Keywords and identifiers -->
+        <keyword attribute="Keyword" context="#stay" String="keywords" />
+        <keyword attribute="Data Type" context="#stay" String="types" />
+        <keyword attribute="Builtin" context="#stay" String="builtins" />
+        <keyword attribute="Constant" context="#stay" String="constants" />
+        
+        <!-- Annotations -->
+        <RegExpr attribute="Annotation" context="#stay" String="@[a-zA-Z_][a-zA-Z0-9_]*" />
+        
+        <!-- Function calls -->
+        <RegExpr attribute="Function" context="#stay" String="[a-zA-Z_][a-zA-Z0-9_]*(?=\s*\()" />
+        
+        <!-- Type references (capitalized identifiers not followed by parentheses) -->
+        <RegExpr attribute="Data Type" context="#stay" String="\b[A-Z][a-zA-Z0-9_]*\b(?!\s*\()" />
+        
+        <!-- Operators -->
+        <RegExpr attribute="Operator" context="#stay" String="\+=|-=|\*=|/=|%=" />
+        <RegExpr attribute="Operator" context="#stay" String="==|!=|&lt;=|&gt;=|&lt;|&gt;" />
+        <RegExpr attribute="Operator" context="#stay" String="\|\||&amp;&amp;|!" />
+        <RegExpr attribute="Operator" context="#stay" String="\+\+|--" />
+        <RegExpr attribute="Operator" context="#stay" String="[+\-*/%]" />
+        <RegExpr attribute="Operator" context="#stay" String="-&gt;" />
+        <RegExpr attribute="Operator" context="#stay" String="\?\s+else\b" />
+        <RegExpr attribute="Operator" context="#stay" String="\.\." />
+        <DetectChar attribute="Operator" context="#stay" char="=" />
+        <DetectChar attribute="Normal Text" context="#stay" char="." />
+        <DetectChar attribute="Symbol" context="#stay" char=":" />
+        
+        <!-- Punctuation -->
+        <DetectChar attribute="Symbol" context="#stay" char="{" />
+        <DetectChar attribute="Symbol" context="#stay" char="}" />
+        <DetectChar attribute="Symbol" context="#stay" char="[" />
+        <DetectChar attribute="Symbol" context="#stay" char="]" />
+        <DetectChar attribute="Symbol" context="#stay" char="(" />
+        <DetectChar attribute="Symbol" context="#stay" char=")" />
+        <DetectChar attribute="Symbol" context="#stay" char="," />
+        <DetectChar attribute="Symbol" context="#stay" char=";" />
+        
+        <!-- Variables and identifiers -->
+        <RegExpr attribute="Variable" context="#stay" String="\b[a-z_][a-zA-Z0-9_]*\b" />
+        
+      </context>
+
+      <!-- String contexts -->
+      <context attribute="String" lineEndContext="#pop" name="String">
+        <DetectChar attribute="String" context="#pop" char="&quot;" />
+        <RegExpr attribute="String Interpolation" context="StringInterpolation" String="\$\{" />
+        <RegExpr attribute="String Char" context="#stay" String="\\." />
+      </context>
+
+      <context attribute="String" lineEndContext="#stay" name="TripleString">
+        <RegExpr attribute="String" context="#pop" String="&quot;&quot;&quot;" />
+        <RegExpr attribute="String Interpolation" context="StringInterpolation" String="\$\{" />
+        <RegExpr attribute="String Char" context="#stay" String="\\." />
+      </context>
+
+      <context attribute="String" lineEndContext="#pop" name="ByteString">
+        <DetectChar attribute="String" context="#pop" char="&quot;" />
+        <RegExpr attribute="String Char" context="#stay" String="\\." />
+      </context>
+
+      <context attribute="Regex" lineEndContext="#pop" name="RegexString">
+        <DetectChar attribute="Regex" context="#pop" char="&quot;" />
+        <RegExpr attribute="String Char" context="#stay" String="\\." />
+      </context>
+
+      <context attribute="String Interpolation" lineEndContext="#stay" name="StringInterpolation">
+        <DetectChar attribute="String Interpolation" context="#pop" char="}" />
+        <keyword attribute="Keyword" context="#stay" String="keywords" />
+        <keyword attribute="Data Type" context="#stay" String="types" />
+        <keyword attribute="Builtin" context="#stay" String="builtins" />
+        <keyword attribute="Constant" context="#stay" String="constants" />
+        <Float attribute="Float" context="#stay" />
+        <Int attribute="Number" context="#stay" />
+        <DetectChar attribute="String" context="String" char="&quot;" />
+        <RegExpr attribute="Function" context="#stay" String="[a-zA-Z_][a-zA-Z0-9_]*(?=\s*\()" />
+        <RegExpr attribute="Variable" context="#stay" String="[a-zA-Z_][a-zA-Z0-9_]*" />
+        <RegExpr attribute="Operator" context="#stay" String="[+\-*/%=&lt;&gt;!&amp;|.]" />
+      </context>
+
+      <!-- Comment contexts -->
+      <context attribute="Comment" lineEndContext="#pop" name="CommentSingleLine">
+        <LineContinue attribute="Comment" context="#stay" />
+        <IncludeRules context="##Comments" />
+      </context>
+
+      <context attribute="Comment" lineEndContext="#stay" name="CommentMultiLine">
+        <Detect2Chars attribute="Comment" context="#pop" char="*" char1="/" />
+        <IncludeRules context="##Comments" />
+      </context>
+
+    </contexts>
+
+    <itemDatas>
+      <itemData name="Normal Text" defStyleNum="dsNormal" />
+      <itemData name="Keyword" defStyleNum="dsKeyword" />
+      <itemData name="Data Type" defStyleNum="dsDataType" />
+      <itemData name="Builtin" defStyleNum="dsBuiltIn" />
+      <itemData name="Constant" defStyleNum="dsConstant" />
+      <itemData name="Comment" defStyleNum="dsComment" />
+      <itemData name="String" defStyleNum="dsString" />
+      <itemData name="String Char" defStyleNum="dsSpecialChar" />
+      <itemData name="String Interpolation" defStyleNum="dsOthers" />
+      <itemData name="Regex" defStyleNum="dsRegionMarker" />
+      <itemData name="Number" defStyleNum="dsDecVal" />
+      <itemData name="Float" defStyleNum="dsFloat" />
+      <itemData name="Function" defStyleNum="dsFunction" />
+      <itemData name="Variable" defStyleNum="dsVariable" />
+      <itemData name="Annotation" defStyleNum="dsPreprocessor" />
+      <itemData name="Operator" defStyleNum="dsOperator" />
+      <itemData name="Symbol" defStyleNum="dsNormal" />
+    </itemDatas>
+
+  </highlighting>
+
+  <general>
+    <comments>
+      <comment name="singleLine" start="//" />
+      <comment name="multiLine" start="/*" end="*/" />
+    </comments>
+    <keywords casesensitive="1" />
+  </general>
+
+</language>

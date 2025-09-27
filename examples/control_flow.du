@@ -1,0 +1,45 @@
+int factorial(int n) do
+    if n <= 1 do
+        return 1
+    elif n > 10 do
+        return 42
+    else
+        return n * factorial(n - 1)
+    end
+end
+
+string categorizeNumber(int n) do
+    if n <= 1 do
+        return "small"
+    elif n > 10 do
+        return "medium"
+    elif n > 100 do
+        return "large"
+    else
+        return "normal"
+    end
+end
+
+int main() do
+    for i in 1 .. 5 do
+        let int result = factorial(i)
+        print("factorial(${i}) = ${result}")
+    end
+
+    // Test elif with categorizeNumber
+    let int testNum = 15
+    let string category = categorizeNumber(testNum)
+    print("Number ${testNum} is ${category}")
+
+    var int count = 0
+    while true do
+        count = count + 1
+        if count == 3 do
+            continue
+        end
+        print(count)
+        if count == 5 do
+            break
+        end
+    end
+end

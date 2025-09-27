@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Duende — XML</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+</head>
+<body>
+  <header>
+    <h1>XML</h1>
+    <p>XML parsing and generation via the <code>std.xml</code> package (powered by <a href="https://code.dlang.org/packages/dxml">dxml</a>).</p>
+  </header>
+  <main>
+    <section>
+      <h2>Available functions and types</h2>
+      <ul>
+        <li>Type: <code>XmlNode</code> with fields <code>name</code>, <code>attributes: dict</code>, <code>text</code>, <code>children: list&lt;XmlNode&gt;</code></li>
+        <li><code>parse(xml: string) -&gt; XmlNode</code>, <code>parseFile(path: string) -&gt; XmlNode</code></li>
+        <li><code>find(node: XmlNode, tag: string) -&gt; list&lt;XmlNode&gt;</code>, <code>findAll(node, tag) -&gt; list&lt;XmlNode&gt;</code></li>
+        <li><code>getAttr(node, name: string, default: string = "") -&gt; string</code>, <code>setAttr(node, name, value)</code></li>
+        <li><code>getText(node) -&gt; string</code>, <code>setText(node, value: string)</code></li>
+        <li><code>fromList(parentTag: string, items: list, itemTag: string = "item") -&gt; XmlNode</code></li>
+        <li><code>fromData(dict, children: list? = null) -&gt; XmlNode</code></li>
+        <li><code>toXml(node) -&gt; string</code>, <code>toXmlPretty(node) -&gt; string</code></li>
+      </ul>
+
+      <h2>Import</h2>
+      <pre><code>import std.xml as xml</code></pre>
+    </section>
+    <section>
+      <h2>Parse</h2>
+      <pre><code>let root = xml.parse("&lt;root a=\"1\"&gt;&lt;child&gt;hi&lt;/child&gt;&lt;/root&gt;")
+print(root.name)        # root
+print(xml.getAttr(root, "a"))   # 1
+print(xml.find(root, "child").len) # 1</code></pre>
+    </section>
+    <section>
+      <h2>Query</h2>
+      <pre><code>let kids = xml.find(root, "child")
+let first = kids[0]
+print(xml.getText(first))</code></pre>
+    </section>
+    <section>
+      <h2>Modify</h2>
+      <pre><code>xml.setAttr(root, "lang", "en")
+xml.setText(first, "hello")</code></pre>
+    </section>
+    <section>
+      <h2>Generate</h2>
+      <pre><code>print(xml.toXml(root))         # compact
+print(xml.toXmlPretty(root))  # pretty</code></pre>
+    </section>
+    <section>
+      <h2>Build from data</h2>
+      <pre><code>let items = ["one", "two"]
+let listNode = xml.fromList("list", items, "li")
+print(xml.toXmlPretty(listNode))</code></pre>
+    </section>
+    <footer>
+      <p>See also the example in <code>examples/std_xml.du</code>.</p>
+    </footer>
+  </main>
+</body>
+</html>

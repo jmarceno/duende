@@ -1,0 +1,28 @@
+name = "duende-std-networking"
+version = "0.1.0"
+
+description = "Networking helpers for Duende, mapping std.networking to D's std.socket"
+
+[modules.std.networking]
+imports = ["std.socket", "core.thread", "core.time", "duende_packages.stdnet.duende_net"]
+aliases = { 
+  tcpListen = "duende_packages.stdnet.duende_net.tcpListen",
+  tcpAccept = "duende_packages.stdnet.duende_net.tcpAccept",
+  tcpAcceptTimeout = "duende_packages.stdnet.duende_net.tcpAcceptTimeout",
+  tcpClose = "duende_packages.stdnet.duende_net.tcpClose",
+  tcpConnect = "duende_packages.stdnet.duende_net.tcpConnect",
+  tcpSend = "duende_packages.stdnet.duende_net.tcpSend",
+  tcpRecvLine = "duende_packages.stdnet.duende_net.tcpRecvLine",
+  tcpRecvLineTimeout = "duende_packages.stdnet.duende_net.tcpRecvLineTimeout",
+  tcpRecvAll = "duende_packages.stdnet.duende_net.tcpRecvAll",
+  spawnEchoOnce = "duende_packages.stdnet.duende_net.spawnEchoOnce",
+  udpOpen = "duende_packages.stdnet.duende_net.udpOpen",
+  udpSendTo = "duende_packages.stdnet.duende_net.udpSendTo",
+  udpRecvFrom = "duende_packages.stdnet.duende_net.udpRecvFrom",
+  udpRecv = "duende_packages.stdnet.duende_net.udpRecv",
+  udpLocalPort = "duende_packages.stdnet.duende_net.udpLocalPort",
+  udpClose = "duende_packages.stdnet.duende_net.udpClose",
+  spawnUdpEchoOnce = "duende_packages.stdnet.duende_net.spawnUdpEchoOnce"
+}
+helpers = ["duende_net.d"]
+reexports = []

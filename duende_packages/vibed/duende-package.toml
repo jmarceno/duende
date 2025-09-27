@@ -1,0 +1,61 @@
+name = "duende-vibe-d"
+version = "0.1.0"
+
+description = "Vibe.d integration for Duende providing web server, HTTP client, websockets, async, SSL, database, logging, timers, filesystem, and process capabilities"
+
+[modules.vibe_d]
+imports = [
+    "vibe.vibe",
+    "vibe.http.server",
+    "vibe.http.client",
+    "vibe.http.websockets",
+    "vibe.stream.tls",
+    "vibe.core.core",
+    "vibe.core.log",
+    "vibe.core.file",
+    "vibe.core.process",
+    "vibe.data.json",
+    "vibe.inet.url",
+    "vibe.utils.array",
+    "std.datetime.stopwatch",
+    "std.conv",
+    "std.array",
+    "std.string",
+    "duende_packages.vibed.duende_vibed"
+]
+aliases = { 
+  startServer = "duende_packages.vibed.duende_vibed.startServer",
+  createHttpClient = "duende_packages.vibed.duende_vibed.createHttpClient",
+  httpGet = "duende_packages.vibed.duende_vibed.httpGet",
+  httpPost = "duende_packages.vibed.duende_vibed.httpPost",
+  httpPut = "duende_packages.vibed.duende_vibed.httpPut",
+  httpDelete = "duende_packages.vibed.duende_vibed.httpDelete",
+  httpsGet = "duende_packages.vibed.duende_vibed.httpsGet",
+  httpsPost = "duende_packages.vibed.duende_vibed.httpsPost",
+  createWebSocketServer = "duende_packages.vibed.duende_vibed.createWebSocketServer",
+  connectWebSocket = "duende_packages.vibed.duende_vibed.connectWebSocket",
+  createTimer = "duende_packages.vibed.duende_vibed.createTimer",
+  setTimeout = "duende_packages.vibed.duende_vibed.setTimeout",
+  readFileAsync = "duende_packages.vibed.duende_vibed.readFileAsync",
+  writeFileAsync = "duende_packages.vibed.duende_vibed.writeFileAsync",
+  createDirectoryAsync = "duende_packages.vibed.duende_vibed.createDirectoryAsync",
+  spawnProcess = "duende_packages.vibed.duende_vibed.spawnProcess",
+  createLogger = "duende_packages.vibed.duende_vibed.createLogger",
+  logInfo = "duende_packages.vibed.duende_vibed.logInfo",
+  logError = "duende_packages.vibed.duende_vibed.logError",
+  logWarn = "duende_packages.vibed.duende_vibed.logWarn",
+  logDebug = "duende_packages.vibed.duende_vibed.logDebug",
+  createTlsContext = "duende_packages.vibed.duende_vibed.createTlsContext",
+  runEventLoop = "duende_packages.vibed.duende_vibed.runEventLoop",
+  exitEventLoop = "duende_packages.vibed.duende_vibed.exitEventLoop"
+}
+helpers = ["duende_vibed.d"]
+reexports = []
+
+[dub]
+dependencies = { 
+    "vibe-d" = "~>0.10.0"
+}
+subConfigurations = {
+    "vibe-stream" = "tls-openssl"
+}

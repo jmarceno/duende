@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Structs & Frames — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Structs & Frames</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="variables.html">Variables</a>
+        <a href="enums.html">Enums</a>
+        <a href="protocols.html">Protocols</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Struct</h2>
+      <ul>
+        <li>Immutable fields.</li>
+        <li>Methods return new structs rather than mutating in place.</li>
+        <li>Declare with <code>let</code>. Declaring with <code>var</code> is an error.</li>
+      </ul>
+      <pre><code>struct Point() do
+    let float x = 0
+    let float y = 0
+    Point move(dx: float, dy: float) do
+        return Point(this.x + dx, this.y + dy)
+    end
+end
+
+let Point p1 = Point(0.0, 0.0)
+let Point moved = p1.move(2, 3)
+</code></pre>
+
+      <h2>Frame</h2>
+      <ul>
+        <li>Mutable fields and methods that mutate in place.</li>
+        <li>Can be declared with <code>var</code> or <code>let</code>, but mutating methods require a mutable binding.</li>
+      </ul>
+      <pre><code>frame MovablePoint() do
+    var float x = 0
+    var float y = 0
+    void move(float dx, float dy) do
+        this.x = this.x + dx
+        this.y = this.y + dy
+    end
+end
+
+var MovablePoint p2 = MovablePoint(3.0, 4.0)
+p2.move(1.0, 1.0)
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="variables.html">Variables</a>, <a href="protocols.html">Protocols</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

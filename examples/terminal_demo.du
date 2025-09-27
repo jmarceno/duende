@@ -1,0 +1,9 @@
+import terminal
+
+// Touch a non-interactive API: stdoutIsTerminal; still print a stable line
+var auto isTty = Terminal.stdoutIsTerminal()
+if isTty do
+	print("Terminal module available")
+else
+	print("Terminal module available")
+end

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Imports & Modules — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Imports & Modules</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="syntax.html">Syntax</a>
+        <a href="types.html">Types</a>
+        <a href="variables.html">Variables</a>
+        <a href="control-flow.html">Control Flow</a>
+        <a href="functions.html">Functions</a>
+        <a href="lambdas.html">Lambdas</a>
+        <a href="collections.html">Collections</a>
+        <a href="strings.html">Strings</a>
+        <a href="bytes.html">Bytes</a>
+        <a href="structs-frames.html">Structs & Frames</a>
+        <a href="enums.html">Enums</a>
+        <a href="protocols.html">Protocols</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+        <a href="result-maybe.html">Result & Maybe</a>
+        <a href="math.html">Math</a>
+        <a href="regex.html">Regex</a>
+        <a href="dates-times.html">Dates & Times</a>
+        <a href="io.html">I/O</a>
+        <a href="file-io.html">File I/O</a>
+        <a href="defer.html">defer</a>
+        <a href="sleep.html">sleep</a>
+        <a href="imports.html" class="active">Imports</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <section class="panel">
+        <h2>Overview</h2>
+        <p>Duende supports importing other source files as modules. Each <code>.du</code> file is a module, and the module name is the file path from the project root without extension, using dots as separators. For example, <code>examples/modules/testModule.du</code> has the module name <code>modules.testModule</code>.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Basic import</h2>
+        <pre><code>import modules.testModule
+
+int main() do
+    print(testModule.add(1,2))
+end
+</code></pre>
+        <p>By default, importing a module provides a short alias equal to the last path segment (here <code>testModule</code>). Use that to qualify functions and types from the module.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Selective import</h2>
+        <pre><code>import modules.otherModule { subtract }
+
+int main() do
+    print(subtract(2,4))
+end
+</code></pre>
+        <p>You can import a subset of symbols. Internally the compiler creates aliases so names appear directly in the current file.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Aliases</h2>
+        <pre><code>import modules.testModule as TM
+import modules.otherModule { subtract as minus }
+
+int main() do
+    print(TM.add(1,2))
+    print(minus(2,4))
+end
+</code></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Relative imports</h2>
+        <p>Inside a module the compiler resolves bare names relative to the current module's parent. For example from <code>modules/testModule.du</code> you can write:</p>
+        <pre><code>import otherModule
+</code></pre>
+        <p>This is resolved to <code>modules.otherModule</code> if such module exists.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Re-exports and visibility</h2>
+        <pre><code>public import modules.testModule
+private import modules.otherModule { subtract }
+</code></pre>
+        <p><code>public import</code> re-exports a module's public API from the current module. <code>private import</code> keeps it internal (the default).</p>
+      </section>
+
+      <section class="panel">
+        <h2>Wildcards</h2>
+        <p>Writing <code>import some.module.*</code> expands to import all exported symbols from that module (resolved statically at compile time).</p>
+      </section>
+
+      <section class="panel">
+        <h2>Example</h2>
+        <p>The example <code>examples/imports.du</code> demonstrates basic imports and selective imports. Running it prints:</p>
+        <pre><code>3
+-2
+</code></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Notes</h2>
+        <ul>
+          <li>Imports are resolved relative to the project root and the current module.</li>
+          <li>Circular imports are supported; the compiler builds a module graph and generates each module once.</li>
+          <li>Standard library is reserved under the <code>std</code> prefix.</li>
+          <li>Math functions require <code>import std.math</code> in each module that uses them.</li>
+          <li>
+            Built-in providers: the Duende compiler embeds a small set of
+            provider manifests (for example: <code>terminal</code>,
+            <code>std.csv</code>, <code>std.json</code>) so these modules are
+            available out of the box. If a provider declares external
+            dependencies (e.g. a dub package), the compiler will automatically
+            build your program via dub when needed — no manual setup required
+            beyond having a D toolchain and dub installed.
+          </li>
+          <li>
+            Additional providers: you can still add your own by placing a
+            <code>duende_packages</code> folder next to the <code>duende</code>
+            executable with provider manifests. The compiler will load these in
+            addition to the built-ins.
+          </li>
+        </ul>
+      </section>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs — Imports & Modules</div>
+  </footer>
+</body>
+</html>

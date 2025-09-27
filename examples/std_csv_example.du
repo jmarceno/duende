@@ -1,0 +1,18 @@
+import std.csv
+
+let string text = "name,age\nAlice,30\nBob,25\n"
+
+// Use CSV parser to iterate records; we keep it simple: print first record's fields
+var int count = 0
+for rec in csvReader(text) do
+  if count == 1 do
+    var int i = 0
+    for field in rec do
+      if i < 2 do
+        print(field)
+      end
+      i = i + 1
+    end
+  end
+  count = count + 1
+end

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Result & Maybe — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Result & Maybe</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+        <a href="file-io.html">File I/O</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Available constructors and helpers</h2>
+      <ul>
+        <li>Result: <code>Ok(value)</code>, <code>Error(message: string)</code></li>
+        <li>Maybe: <code>Some(value)</code>, <code>None</code></li>
+        <li>Unwrap: <code>x ? else expr</code> operator</li>
+        <li>Strict casting: <code>safeCast(T, value) -&gt; Result&lt;T&gt;</code> where <code>T</code> is <code>int|float|string|bool|bytes</code></li>
+      </ul>
+      <h2>Result</h2>
+      <p>Use <code>Ok(value)</code> for success and <code>Error(message)</code> for failure.</p>
+      <pre><code>Result&lt;int&gt; safe_divide(int a, int b) do
+    if b == 0 do
+        return Error("division by zero")
+    end
+    return Ok(a / b)
+end
+
+let Result&lt;int&gt; r = safe_divide(10, 0)
+let int v = r ? else -1
+print(v) // -1
+</code></pre>
+
+      <h2>? else operator</h2>
+      <p>Extract a value or compute a fallback expression when the result is an error.</p>
+      <pre><code>let Result&lt;float&gt; parsed = parse_number("invalid")
+let float f = parsed ? else 0.0
+</code></pre>
+
+      <h2>Maybe</h2>
+      <p><code>Some(value)</code> or <code>None</code> represent optional values.</p>
+      <pre><code>let Maybe&lt;string&gt; maybe_some = Some("Hello")
+let string s1 = maybe_some ? else "default"
+
+let Maybe&lt;string&gt; maybe_none = None
+let string s2 = maybe_none ? else "default"
+</code></pre>
+
+      <h2>Pattern matching</h2>
+      <p>Match on <code>Ok(x)</code> and <code>Error(e)</code>. See <a href="pattern-matching.html">Pattern Matching</a>.</p>
+
+      <div class="see-also">
+        See also: <a href="file-io.html">File I/O</a>, <a href="pattern-matching.html">Pattern Matching</a>
+      </div>
+      
+      <h2>Strict casting with safeCast</h2>
+      <p>Use <code>safeCast(T, value)</code> to perform a strict conversion that returns <code>Result&lt;T&gt;</code> instead of throwing. The first argument is a type literal (<code>int</code>, <code>float</code>, <code>string</code>, <code>bool</code>, <code>bytes</code>).</p>
+      <pre><code>let Result&lt;int&gt; x = safeCast(int, "10")     // Ok(10)
+let Result&lt;string&gt; s = safeCast(string, 123) // Ok("123")
+let Result&lt;int&gt; bad = safeCast(int, "NaN")   // Error("NaN")
+let Result&lt;int&gt; err = safeCast(int, "abc")   // Error("...parse error...")
+
+// Handle with ? else or pattern matching
+let int n = x ? else -1
+match bad do
+  Ok(v) -> print(v)
+  Error(e) -> print(e)
+end
+</code></pre>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

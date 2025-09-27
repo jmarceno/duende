@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>File I/O — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>File I/O</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="io.html">I/O</a>
+        <a href="bytes.html">Bytes</a>
+        <a href="result-maybe.html">Result & Maybe</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Available functions</h2>
+      <ul>
+        <li><code>readText(path: string) -&gt; Result&lt;string&gt;</code></li>
+        <li><code>readBytes(path: string) -&gt; Result&lt;bytes&gt;</code></li>
+        <li><code>writeText(path: string, text: string) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>writeBytes(path: string, data: bytes) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>appendText(path: string, text: string) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>appendBytes(path: string, data: bytes) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>readLines(path: string) -&gt; Result&lt;list&gt;</code> (list of strings)</li>
+        <li><code>writeLines(path: string, lines: list) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>appendLines(path: string, lines: list) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>fileExists(path: string) -&gt; bool</code></li>
+        <li><code>dirExists(path: string) -&gt; bool</code></li>
+        <li><code>deleteFile(path: string) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>listDir(path: string = ".") -&gt; Result&lt;list&gt;</code> (file names)</li>
+        <li><code>makeDir(path: string) -&gt; Result&lt;bool&gt;</code></li>
+        <li><code>removeDir(path: string) -&gt; Result&lt;bool&gt;</code> (recursive)</li>
+        <li><code>getCwd() -&gt; Result&lt;string&gt;</code></li>
+        <li><code>fileSize(path: string) -&gt; Result&lt;int&gt;</code></li>
+        <li><code>getMetadata(path: string) -&gt; Result&lt;dict&gt;</code> (keys: <code>isDir</code>, <code>isFile</code>, <code>size</code>)</li>
+        <li><code>joinPath(a: string, b: string, ...) -&gt; string</code></li>
+      </ul>
+
+      <h2>Paths and directories</h2>
+      <pre><code>let Result&lt;string&gt; cwdRes = getCwd()
+let string cwd = cwdRes ? else ""
+let string tmpDir = joinPath(cwd, "io_tmp")
+
+if dirExists(tmpDir) do removeDir(tmpDir) end
+makeDir(tmpDir)
+print(dirExists(tmpDir))
+</code></pre>
+
+      <h2>Text files</h2>
+      <pre><code>writeText(file1, "hello")
+match readText(file1) do
+    Ok(txt) -> print(txt)
+end
+appendText(file1, "!")
+match readText(file1) do
+    Ok(txt2) -> print(txt2)
+end
+
+writeLines(file2, ["a", "b", "c"])
+let list&lt;string&gt; lines = readLines(file2) ? else []
+</code></pre>
+
+      <h2>Bytes</h2>
+      <pre><code>let bytes data = [1, 2, 255]
+writeBytes(binf, data)
+match readBytes(binf) do
+    Ok(b) -> print(b.length)
+end
+</code></pre>
+
+      <h2>Metadata and listing</h2>
+      <pre><code>match fileSize(file1) do
+    Ok(sz) -> print(sz)
+end
+match getMetadata(file1) do
+    Ok(meta) -> print(meta["size"]) // dict metadata
+end
+match listDir(tmpDir) do
+    Ok(entries) -> print(entries.length)
+end
+</code></pre>
+
+      <h2>Deletion</h2>
+      <pre><code>deleteFile(file1)
+removeDir(tmpDir)
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="bytes.html">Bytes</a>, <a href="result-maybe.html">Result & Maybe</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

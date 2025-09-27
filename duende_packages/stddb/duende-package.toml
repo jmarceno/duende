@@ -1,0 +1,45 @@
+name = "duende-std-database"
+version = "0.1.0"
+
+description = "Database access for Duende using ddbc (SQLite, MySQL, PostgreSQL, SQL Server via ODBC)"
+
+[modules.std.database]
+imports = [
+  "ddbc",
+  "std.conv",
+  "std.string",
+  "std.array",
+  "std.format",
+  "duende_packages.stddb.duende_db"
+]
+helpers = ["duende_db.d"]
+aliases = {
+  # Connection and transactions
+  dbConnect = "duende_packages.stddb.duende_db.dbConnect",
+  dbClose = "duende_packages.stddb.duende_db.dbClose",
+  dbBegin = "duende_packages.stddb.duende_db.dbBegin",
+  dbCommit = "duende_packages.stddb.duende_db.dbCommit",
+  dbRollback = "duende_packages.stddb.duende_db.dbRollback",
+
+  # Statements
+  dbExecute = "duende_packages.stddb.duende_db.dbExecute",
+  dbQueryScalar = "duende_packages.stddb.duende_db.dbQueryScalar",
+  dbQueryAll = "duende_packages.stddb.duende_db.dbQueryAll",
+
+  # Prepared statements
+  dbPrepare = "duende_packages.stddb.duende_db.dbPrepare",
+  dbCloseStmt = "duende_packages.stddb.duende_db.dbCloseStmt",
+  dbCloseStmtTry = "duende_packages.stddb.duende_db.dbCloseStmtTry",
+  dbExecPrepared = "duende_packages.stddb.duende_db.dbExecPrepared",
+  dbExecPreparedTry = "duende_packages.stddb.duende_db.dbExecPreparedTry",
+  dbBindString = "duende_packages.stddb.duende_db.dbBindString",
+  dbBindInt = "duende_packages.stddb.duende_db.dbBindInt",
+  dbBindFloat = "duende_packages.stddb.duende_db.dbBindFloat",
+  dbBindBytes = "duende_packages.stddb.duende_db.dbBindBytes",
+  dbExecuteTry = "duende_packages.stddb.duende_db.dbExecuteTry"
+}
+reexports = []
+
+[dub]
+dependencies = { "ddbc" = "~>0.7.0" }
+subConfigurations = { "ddbc" = "SQLite" }

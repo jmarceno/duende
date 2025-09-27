@@ -1,0 +1,54 @@
+// Math built-ins demonstration: trig (rad/deg), conversions, abs/min/max, floor/ceil/round, sqrt/pow/log/exp
+// Demonstrates global variables usage
+import std.math
+
+// Global constants for mathematical computations
+var float pi = 3.141592653589793
+let int roundingPrecision = 2
+let int formatPrecision = 4
+
+// Global mutable variables for computation state
+var float globalResult = 0.0
+
+int main() do
+    // Basic math functions (accept ints and floats)
+    print(abs(-5))            // 5
+    print(abs(-3.2))          // 3.2
+
+    print(min(3, 7))          // 3
+    print(max(3, 7))          // 7
+    print(min(2.5, 2.4))      // 2.4
+    print(max(2.5, 2.4))      // 2.5
+
+    print(floor(3.7))         // 3
+    print(ceil(3.1))          // 4
+    print(round(3.6))         // 4
+    print(round(3.4))         // 3
+
+    // Store sqrt result in global variable for potential reuse
+    globalResult = sqrt(9)
+    print(globalResult)       // 3
+    
+    print(pow(2, 8))          // 256
+
+    print(log(exp(1)))        // 1 (approximately, but our formatting prints default double)
+
+    // Trigonometry in radians using global pi constant
+    print(sin(0))             // 0
+    print(cos(0))             // 1
+    print(tan(0))             // 0
+
+    // Trigonometry in degrees
+    print(sinDeg(0))          // 0
+    print(cosDeg(0))          // 1
+    print(tanDeg(0))          // 0
+
+    // Degree/radian conversion helpers using global pi
+    print(toRadians(180))     // pi
+    print(toDegrees(pi))      // 180
+
+    // Formatting helpers using global precision constants
+    print(roundTo(3.1415926, roundingPrecision))    // 3.14
+    print(formatFloat(3.1415926, formatPrecision))  // 3.1416
+
+end

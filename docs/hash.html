@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hashing & Digest — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Hashing & Digest</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="imports.html">Imports</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">The <code>std.hash</code> provider exposes hashing and checksum functions backed by D's <code>std.digest</code> module. It supports MD5, CRC32/CRC64 (ECMA), SHA-1, SHA-2 family, and MurmurHash3 (x86 32-bit).</p>
+
+      <h2>Import</h2>
+      <pre><code>import std.hash
+// or
+import std.digest</code></pre>
+
+      <h2>API</h2>
+      <h3>Available functions</h3>
+      <ul>
+        <li><code>md5(s: string) -&gt; string</code> (hex)</li>
+        <li><code>crc32(s: string) -&gt; int</code></li>
+        <li><code>crc64(s: string) -&gt; int</code></li>
+        <li><code>sha1(s: string) -&gt; string</code></li>
+        <li><code>sha224(s: string) -&gt; string</code></li>
+        <li><code>sha256(s: string) -&gt; string</code></li>
+        <li><code>sha384(s: string) -&gt; string</code></li>
+        <li><code>sha512(s: string) -&gt; string</code></li>
+        <li><code>sha512_224(s: string) -&gt; string</code></li>
+        <li><code>sha512_256(s: string) -&gt; string</code></li>
+        <li><code>murmurhash3(s: string, seed: int = 0) -&gt; int</code></li>
+      </ul>
+
+      <h2>Example</h2>
+      <pre><code>import std.hash
+
+let string s = "abc"
+print(md5(s))        // 900150983cd24fb0d6963f7d28e17f72
+print(sha256(s))     // ba7816bf...
+print(crc32(s))      // 891568578
+print(crc64(s))      // 7372421403230734421
+print(murmurhash3(s))
+print(murmurhash3(s, 42))
+</code></pre>
+
+      <div class="see-also">See also: <a href="encoding.html">Encoding</a> · <a href="packages.html">Packages</a> · <a href="imports.html">Imports</a></div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

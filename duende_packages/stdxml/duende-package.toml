@@ -1,0 +1,13 @@
+name = "duende-std-xml"
+version = "0.1.0"
+
+description = "XML parsing and writing for Duende using dxml"
+
+[modules.std.xml]
+imports = ["dxml.dom", "dxml.writer", "std.algorithm", "std.array", "std.string", "duende_packages.stdxml.duende_xml"]
+aliases = { XmlNode="duende_packages.stdxml.duende_xml.XmlNode", parse="duende_packages.stdxml.duende_xml.parseXml", parseFile="duende_packages.stdxml.duende_xml.parseXmlFile", toXml="duende_packages.stdxml.duende_xml.toXml", toXmlPretty="duende_packages.stdxml.duende_xml.toXmlPretty", find="duende_packages.stdxml.duende_xml.find", findAll="duende_packages.stdxml.duende_xml.findAll", getAttr="duende_packages.stdxml.duende_xml.getAttr", getText="duende_packages.stdxml.duende_xml.getText", setAttr="duende_packages.stdxml.duende_xml.setAttr", setText="duende_packages.stdxml.duende_xml.setText", fromData="duende_packages.stdxml.duende_xml.fromData", fromList="duende_packages.stdxml.duende_xml.fromList" }
+helpers = ["duende_xml.d"]
+reexports = []
+
+[dub]
+dependencies = { "dxml" = "~>0.4.5" }

@@ -1,0 +1,56 @@
+name = "duende-std-hash"
+version = "0.1.0"
+
+description = "Hashing and digest helpers for Duende using std.digest (MD5, CRC32/64, SHA1/2 family, MurmurHash3)"
+
+[modules.std.hash]
+imports = [
+  "std.digest.md",
+  "std.digest.sha",
+  "std.digest.crc",
+  "std.digest.murmurhash",
+  "std.array",
+  "std.format",
+  "duende_packages.stdhash.duende_hash"
+]
+helpers = ["duende_hash.d"]
+aliases = {
+  md5 = "duende_packages.stdhash.duende_hash.md5",
+  crc32 = "duende_packages.stdhash.duende_hash.crc32",
+  crc64 = "duende_packages.stdhash.duende_hash.crc64",
+  sha1 = "duende_packages.stdhash.duende_hash.sha1",
+  sha224 = "duende_packages.stdhash.duende_hash.sha224",
+  sha256 = "duende_packages.stdhash.duende_hash.sha256",
+  sha384 = "duende_packages.stdhash.duende_hash.sha384",
+  sha512 = "duende_packages.stdhash.duende_hash.sha512",
+  sha512_224 = "duende_packages.stdhash.duende_hash.sha512_224",
+  sha512_256 = "duende_packages.stdhash.duende_hash.sha512_256",
+  murmurhash3 = "duende_packages.stdhash.duende_hash.murmurhash3"
+}
+reexports = []
+
+[modules.std.digest]
+imports = [
+  "std.digest.md",
+  "std.digest.sha",
+  "std.digest.crc",
+  "std.digest.murmurhash",
+  "std.array",
+  "std.format",
+  "duende_packages.stdhash.duende_hash"
+]
+helpers = ["duende_hash.d"]
+aliases = {
+  md5 = "duende_packages.stdhash.duende_hash.md5",
+  crc32 = "duende_packages.stdhash.duende_hash.crc32",
+  crc64 = "duende_packages.stdhash.duende_hash.crc64",
+  sha1 = "duende_packages.stdhash.duende_hash.sha1",
+  sha224 = "duende_packages.stdhash.duende_hash.sha224",
+  sha256 = "duende_packages.stdhash.duende_hash.sha256",
+  sha384 = "duende_packages.stdhash.duende_hash.sha384",
+  sha512 = "duende_packages.stdhash.duende_hash.sha512",
+  sha512_224 = "duende_packages.stdhash.duende_hash.sha512_224",
+  sha512_256 = "duende_packages.stdhash.duende_hash.sha512_256",
+  murmurhash3 = "duende_packages.stdhash.duende_hash.murmurhash3"
+}
+reexports = []

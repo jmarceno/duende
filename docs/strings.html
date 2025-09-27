@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Strings — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Strings</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="regex.html">Regex</a>
+        <a href="collections.html">Collections</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Available methods</h2>
+      <ul>
+        <li>Methods on string
+          <ul>
+            <li><code>split(sep: string) -&gt; list&lt;string&gt;</code></li>
+            <li><code>replace(search: string|regex, replace: string) -&gt; string</code></li>
+            <li><code>toUpperCase() -&gt; string</code></li>
+            <li><code>toLowerCase() -&gt; string</code></li>
+            <li><code>trim() -&gt; string</code></li>
+            <li><code>substring(start: int, end: int) -&gt; string</code></li>
+            <li><code>indexOf(substr: string) -&gt; int</code></li>
+            <li><code>lastIndexOf(substr: string) -&gt; int</code></li>
+            <li><code>startsWith(prefix: string) -&gt; bool</code></li>
+            <li><code>endsWith(suffix: string) -&gt; bool</code></li>
+            <li><code>contains(substr: string | regex) -&gt; bool</code></li>
+            <li><code>matches(regex) -&gt; bool</code></li>
+            <li><code>compare(other: string) -&gt; int</code> (-1, 0, 1)</li>
+            <li><code>equals(other: string) -&gt; bool</code></li>
+            <li><code>notEquals(other: string) -&gt; bool</code></li>
+            <li><code>isEmpty() -&gt; bool</code></li>
+            <li><code>length() -&gt; int</code> (also <code>.length</code> property)</li>
+            <li><code>charAt(i: int) -&gt; string</code></li>
+            <li><code>charCodeAt(i: int) -&gt; int</code></li>
+            <li><code>toInt() -&gt; int</code></li>
+            <li><code>toFloat() -&gt; float</code></li>
+            <li><code>toBool() -&gt; bool</code> (true if equal to <code>"true"</code>)</li>
+            <li><code>toBytes() -&gt; bytes</code></li>
+            <li><code>format(...args) -&gt; string</code></li>
+            <li><code>formatNumber(...args) -&gt; string</code></li>
+          </ul>
+        </li>
+        <li>Free functions
+          <ul>
+            <li><code>len(x) -&gt; int</code></li>
+            <li><code>fromBytes(b: bytes) -&gt; string</code></li>
+          </ul>
+        </li>
+      </ul>
+
+      <h2>Interpolation and formatting</h2>
+      <pre><code>let string name = "Duende"
+let int score = 95
+let float ratio = 1.0 / 3.0
+print("Hello ${name}! Score=${score}, ratio=${ratio|%.2f}")
+</code></pre>
+
+      <h2>Manipulation</h2>
+  <pre><code>let list&lt;string&gt; parts = "a,b,c".split(",")
+print(parts.join("-"))
+print("Hello World".replace("World", "Duende"))
+print("hello".toUpperCase())
+print("HELLO".toLowerCase())
+print("  trim me  ".trim())
+print("abcdef".substring(2, 5))
+</code></pre>
+
+      <h2>Searching</h2>
+      <pre><code>print("foobar".indexOf("o"))
+print("foobar".lastIndexOf("o"))
+print("foobar".startsWith("foo"))
+print("foobar".endsWith("bar"))
+print("foobar".contains("oba"))
+print("foo123".matches(regex("\\d+")))
+</code></pre>
+
+      <h2>Conversion and encoding</h2>
+      <pre><code>print("42".toInt())
+print("3.14".toFloat())
+print("true".toBool())
+let bytes b = "hi".toBytes()
+print(fromBytes(b))
+</code></pre>
+
+      <h2>Comparison and formatting helpers</h2>
+      <pre><code>print("abc".compare("abd"))   // -1
+print("abc".equals("abc"))    // true
+print("abc".notEquals("abd")) // true
+print("Value: %04d".format(7))
+print("%.1f".formatNumber(2.56))
+</code></pre>
+
+      <h2>Utilities</h2>
+      <pre><code>print("".isEmpty())
+print("xyz".length())
+print("xyz".charAt(1))
+print("xyz".charCodeAt(1))
+</code></pre>
+
+  <h2>Escaping in interpolation</h2>
+  <p>Use backslash to escape characters inside strings. In addition to \n, \t, \r, \" and \\:</p>
+  <ul>
+    <li><code>\${</code> inserts a literal <code>${</code> without starting interpolation.</li>
+    <li><code>\}</code> inserts a literal closing brace <code>}</code> without ending interpolation.</li>
+  </ul>
+  <p>Both double-quoted and single-quoted strings support these escapes.</p>
+  <pre><code>let string name = "Duende"
+print("Literal: \\${name} and \\}")     // Literal: ${name} and }
+print("Mix: \\${name} -> ${name}")      // Mix: ${name} -> Duende
+print('Singles: \\ and \\} and \\${ ok') // Singles: \ and } and ${ ok
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="regex.html">Regex</a>, <a href="bytes.html">Bytes</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

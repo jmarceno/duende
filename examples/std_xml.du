@@ -1,0 +1,33 @@
+// Example: std.xml usage
+// Parse, query, modify, and generate XML
+
+import std.xml
+
+int main() do
+	let string sample = "<catalog><book id=\"b1\"><title>Duende Guide</title><author>Jane</author></book><book id=\"b2\"><title>XML 101</title><author>John</author></book></catalog>"
+
+	// Parse from string
+	let auto root = parse(sample)
+	print(root.name)
+
+	// Query children
+	let auto books = find(root, "book")
+	print(books.length)
+
+	// Read attributes and nested text
+	let auto first = books[0]
+	print(getAttr(first, "id"))
+	let auto titleNode = find(first, "title")[0]
+	print(getText(titleNode))
+
+	// Modify attribute
+	setAttr(first, "lang", "en")
+
+	// Generate compact XML
+	print(toXml(root))
+
+	// Build new XML from list
+	let list<string> items = ["one", "two", "three"]
+	let auto listNode = fromList("list", items, "li")
+	print(toXmlPretty(listNode))
+end

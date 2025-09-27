@@ -1,0 +1,4 @@
+
+int subtract (int a, int b) do
+    return a - b
+end

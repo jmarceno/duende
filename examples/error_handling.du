@@ -1,0 +1,48 @@
+// Example demonstrating Result-based error handling in Duende
+
+Result<int> safe_divide(int a, int b) do
+    if b == 0 do
+        return Error("division by zero")
+    end
+    return Ok(a / b)
+end
+
+Result<float> parse_number(string str) do
+    if str == "invalid" do
+        return Error("invalid number format")
+    end
+    return Ok(42.5)
+end
+
+int main() do
+    // Test successful division
+    let Result<int> good_result = safe_divide(10, 2)
+    let int good_value = good_result ? else -1
+    print("Good division: ${good_value}")
+
+    // Test division by zero
+    let Result<int> bad_result = safe_divide(10, 0)
+    let int bad_value = bad_result ? else -1
+    print("Bad division: ${bad_value}")
+
+    // Test successful parsing
+    let Result<float> good_parse = parse_number("42")
+    let float good_float = good_parse ? else 0.0
+    print("Good parse: ${good_float}")
+
+    // Test failed parsing
+    let Result<float> bad_parse = parse_number("invalid")
+    let float bad_float = bad_parse ? else 0.0
+    print("Bad parse: ${bad_float}")
+
+    // Demonstrate Maybe type with Some/None
+    let Maybe<string> maybe_some = Some("Hello")
+    let string some_value = maybe_some ? else "default"
+    print("Maybe some: ${some_value}")
+
+    let Maybe<string> maybe_none = None
+    let string none_value = maybe_none ? else "default"
+    print("Maybe none: ${none_value}")
+
+    return 0
+end

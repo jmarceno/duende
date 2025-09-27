@@ -1,0 +1,4 @@
+let string name = "Alice"
+let int score = 95
+print("Player ${name} scored ${score} points!")
+print("Next level requires ${score + 5} points")

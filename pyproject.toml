@@ -1,0 +1,17 @@
+[project]
+name = "duende-tests"
+version = "0.1.0"
+description = "Integration tests for the Duende programming language"
+requires-python = ">=3.13"
+dependencies = [
+    "pytest>=7.0.0",
+    "pytest-xdist>=3.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Prevent auto-discovery of top-level packages (this repo is not a Python package)
+packages = []

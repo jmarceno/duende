@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Processes — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Process Management</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <section class="panel">
+        <h2>std.process package</h2>
+        <p>The <code>std.process</code> package provides portable process management built on D's <code>std.process</code>.
+           Import it with <code>import std.process</code>.</p>
+        <ul>
+          <li><code>execute(args)</code>, <code>executeShell(cmd)</code> — run and capture stdout and stderr separately (Duende helper).</li>
+          <li><code>spawnProcess</code>, <code>wait</code>, <code>tryWait</code>, <code>kill</code> — core primitives.</li>
+          <li><code>pipeProcess</code>, <code>pipeShell</code> — redirect stdio via pipes.</li>
+          <li><code>readAllStdout</code>, <code>readAllStderr</code> — convenience readers for <code>ProcessPipes</code>.</li>
+        </ul>
+        <h3>Available functions and types</h3>
+        <ul>
+          <li>Types: <code>Pid</code>, <code>ProcessPipes</code>, <code>Redirect</code>, <code>Config</code></li>
+          <li><code>environment</code> (dict-like)</li>
+          <li><code>spawnProcess(argv: list, ...)</code>, <code>spawnShell(cmd: string, ...)</code></li>
+          <li><code>pipeProcess(argv: list, redir)</code>, <code>pipeShell(cmd: string, redir)</code></li>
+          <li><code>wait(pid) -&gt; int</code>, <code>tryWait(pid) -&gt; Maybe&lt;int&gt;</code>, <code>kill(pid)</code></li>
+          <li><code>execute(args: list, env: dict? = null, config = none, workDir: string? = null) -&gt; ExecResult</code></li>
+          <li><code>executeShell(cmd: string, env: dict? = null, config = none, workDir: string? = null) -&gt; ExecResult</code></li>
+          <li><code>readAllStdout(pipes: ProcessPipes) -&gt; string</code>, <code>readAllStderr(pipes: ProcessPipes) -&gt; string</code></li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>Example</h3>
+<pre><code>import std.process
+
+int main() do
+  var auto res = execute(["/bin/sh", "-c", "echo hello && echo err 1>&2"]) 
+  print(res.stdout.trim())
+  print(res.stderr.trim())
+  print(res.status)
+
+  var auto p = pipeShell("printf hi && printf oops 1>&2", Redirect.stdout | Redirect.stderr)
+  print(readAllStdout(p))
+  print(readAllStderr(p))
+  print(wait(p.pid))
+  return 0
+end</code></pre>
+      </section>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs — offline static pages</div>
+  </footer>
+</body>
+</html>

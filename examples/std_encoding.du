@@ -1,0 +1,35 @@
+import std.encoding
+
+// Example: encoding and decoding between UTF-8, UTF-16 (LE/BE), Base64, and Hex
+// Demonstrates round-trips, inspections, and conversions on realistic payloads.
+
+let string text = "Hello, 世界"
+
+// UTF-8 bytes
+let bytes b8 = utf8Encode(text)
+print(len(b8))          // length in bytes
+print(fromBytes(b8[0:5])) // first 5 bytes as ASCII subset "Hello"
+
+// UTF-16 little endian and big endian
+let bytes b16le = utf16LEEncode(text)
+let bytes b16be = utf16BEEncode(text)
+// Decode back
+print(utf16LEDecode(b16le))
+print(utf16BEDecode(b16be))
+
+// Base64
+let string b64 = base64Encode(b8)
+print(b64)
+let bytes b8_2 = base64Decode(b64)
+print(utf8Decode(b8_2))
+
+// Hex
+let string hx = hexEncode(b8)
+print(hx[0:10])   // print first 10 hex chars to keep output short
+let bytes b8_3 = hexDecode(hx)
+print(utf8Decode(b8_3))
+
+// Generic conversions by labels
+print(convertToString("utf-8", b8))
+print(fromBytes(convertToBytes("hex", "OK")))
+print(convertToString("hex", utf8Encode(hexEncode(utf8Encode("OK")))))

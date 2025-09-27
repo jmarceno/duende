@@ -1,0 +1,16 @@
+name = "duende-std-async"
+version = "0.1.0"
+
+description = "Async/await-style helpers for Duende using D fibers and a tiny scheduler"
+
+[modules.std.async]
+imports = ["core.thread", "core.time", "duende_packages.stdasync.duende_async"]
+aliases = {
+  spawn = "duende_packages.stdasync.duende_async.spawn",
+  run = "duende_packages.stdasync.duende_async.run",
+  sleepAsync = "duende_packages.stdasync.duende_async.sleepAsync",
+  awaitReadable = "duende_packages.stdasync.duende_async.awaitReadable",
+  yieldNow = "duende_packages.stdasync.duende_async.yieldNow"
+}
+helpers = ["duende_async.d"]
+reexports = []

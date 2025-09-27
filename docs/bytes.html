@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bytes — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Bytes</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="file-io.html">File I/O</a>
+        <a href="strings.html">Strings</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+  <h2>Available methods</h2>
+  <ul>
+    <li>On bytes
+      <ul>
+        <li><code>upper() -&gt; bytes</code> (ASCII)</li>
+        <li><code>lower() -&gt; bytes</code> (ASCII)</li>
+        <li><code>find(sub: bytes) -&gt; int</code> (index or -1)</li>
+        <li><code>slice(start: int, end: int) -&gt; bytes</code></li>
+        <li><code>length</code> property and <code>length()</code> method</li>
+      </ul>
+    </li>
+    <li>Free functions
+      <ul>
+        <li><code>len(x) -&gt; int</code></li>
+        <li><code>fromBytes(b: bytes) -&gt; string</code></li>
+      </ul>
+    </li>
+  </ul>
+
+  <h2>Byte arrays</h2>
+  <p>Duende has a built-in <code>bytes</code> type for binary data. You can create it from a list of numbers or with a bytes literal using the <code>b"..."</code> prefix.</p>
+  <pre><code>let bytes data = [1, 2, 255]
+let bytes hello = b"hello"
+let bytes world = b" world"
+let bytes hw = hello + world    // concatenation
+print(fromBytes(hw))            // "hello world"
+
+// indexing and length
+print(data.length)              // 3
+print(data[0] + data[1])        // 3
+print(data[2])                  // 255
+
+// slicing
+let bytes slice = hello[1:4]    // b"ell"
+print(fromBytes(slice))
+
+// len() builtin
+print(len(hello))               // 5
+
+// iteration
+var int sum = 0
+for b in hello do
+    sum = sum + b
+end
+print(sum)
+
+// methods
+print(fromBytes(hello.upper())) // b"HELLO"
+print(fromBytes(hello.lower())) // b"hello"
+print(hello.find(b"l"))        // 2
+</code></pre>
+
+  <p>Convert strings to bytes and back with <code>toBytes()</code> and <code>fromBytes(...)</code>. See <a href="strings.html">Strings</a> and <a href="file-io.html">File I/O</a> for examples.</p>
+
+      <div class="see-also">
+        See also: <a href="file-io.html">File I/O</a>, <a href="strings.html">Strings</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

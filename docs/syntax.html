@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Syntax — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Syntax</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="types.html">Types</a>
+        <a href="variables.html">Variables</a>
+        <a href="control-flow.html">Control Flow</a>
+        <a href="functions.html">Functions</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+  <h2>Comments</h2>
+  <p>Single-line comments start with <code>//</code>. Duende also supports block comments <code>/* ... */</code> and JSDoc-style block comments <code>/** ... */</code>. All comments are ignored by the compiler at this stage.</p>
+  <pre><code>// This is a comment
+print("Hello") // trailing comment
+
+/* A block comment
+   spanning multiple lines */
+
+/**
+ * JSDoc-style comment (currently ignored)
+ */
+int add(int a, int b) do
+    return a + b
+end
+</code></pre>
+
+      <h2>Blocks</h2>
+      <p>Blocks are delimited by <code>do</code> and <code>end</code>. Function bodies and control structures use this form.</p>
+      <pre><code>int main() do
+    print("Hello")
+end
+</code></pre>
+
+  <h2>Function parameters</h2>
+  <p>Parameters use <code>type name</code> or named form <code>type: name</code>. Defaults are written with <code>=</code> and must be constant expressions. All defaulted parameters must trail non-default ones.</p>
+  <pre><code>int f(int a, int b = 10) do
+    return a + b
+end
+
+void greet(string: name) do
+    print("Hello, ${name}")
+end
+
+// Calls
+let int x = f(2)          // uses default b = 10
+greet(name: "Duende")    // named argument call
+
+// Mixing is allowed; unnamed fill left-to-right
+let int y = f(2, b: 5)
+</code></pre>
+
+      <h2>Literals</h2>
+      <ul>
+        <li>Integers are 64-bit: <code>42</code></li>
+        <li>Floats are doubles: <code>3.14</code></li>
+        <li>Strings use double quotes and support interpolation.</li>
+        <li>Booleans: <code>true</code>, <code>false</code></li>
+        <li>Lists: <code>[1, 2, 3]</code>; Dicts: <code>{"k": 1}</code></li>
+        <li>Bytes: <code>let bytes b = [1, 2, 255]</code> (see <a href="bytes.html">Bytes</a>)</li>
+      </ul>
+
+      <h2>String interpolation</h2>
+      <p>Use <code>${expr}</code> inside strings; optional format spec after <code>|</code>. See <a href="strings.html">Strings</a>.</p>
+      <pre><code>let string name = "Duende"
+let float ratio = 1.0 / 3.0
+print("Hello ${name}, ratio=${ratio|%.2f}")
+</code></pre>
+
+      <h2>Operators</h2>
+      <ul>
+        <li>Arithmetic: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>%</code> (modulo)</li>
+        <li>Comparison: <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></li>
+        <li>Boolean: <code>!</code>, <code>&&</code>, <code>||</code></li>
+        <li>Indexing: <code>a[i]</code>; dict: <code>d["key"]</code></li>
+      </ul>
+
+      <div class="see-also">
+        See also: <a href="variables.html">Variables</a>, <a href="types.html">Types</a>, <a href="strings.html">Strings</a>, <a href="collections.html">Collections</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

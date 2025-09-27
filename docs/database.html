@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Database — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Database</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">Duende provides database access via the std.database package, backed by the DDBC library. Supported databases include SQLite, MySQL, PostgreSQL, and SQL Server (via ODBC). SQLite requires no server and is used in examples and tests.</p>
+
+      <h2>Available functions and types</h2>
+      <ul>
+        <li>Types: <code>DBConn</code>, <code>DBStmt</code> (you can pass these between functions; using <code>auto</code> for parameters works and is inferred)</li>
+        <li>Connection: <code>dbConnect(url: string) -&gt; DBConn</code>, <code>dbClose(conn)</code></li>
+        <li>Transactions: <code>dbBegin(conn)</code>, <code>dbCommit(conn)</code>, <code>dbRollback(conn)</code></li>
+        <li>Direct SQL: <code>dbExecute(conn, sql: string) -&gt; int</code>, <code>dbExecuteTry(conn, sql) -&gt; int</code></li>
+  <li>Queries: <code>dbQueryScalar(conn, sql: string) -&gt; string</code>, <code>dbQueryAll(conn, sql: string) -&gt; list&lt;list&lt;string&gt;&gt;</code></li>
+        <li>Prepared: <code>dbPrepare(conn, sql: string) -&gt; DBStmt</code>, <code>dbCloseStmt(stmt)</code>, <code>dbCloseStmtTry(stmt)</code></li>
+        <li>Binds: <code>dbBindString(stmt, idx: int, v: string)</code>, <code>dbBindInt(stmt, idx: int, v: int)</code>, <code>dbBindFloat(stmt, idx: int, v: float)</code>, <code>dbBindBytes(stmt, idx: int, v: bytes)</code></li>
+        <li>Exec prepared: <code>dbExecPrepared(stmt) -&gt; int</code>, <code>dbExecPreparedTry(stmt) -&gt; int</code></li>
+      </ul>
+
+      <h2>Setup</h2>
+      <ul>
+        <li>Import <code>std.database</code> in your Duende module.</li>
+        <li>No manual dependency setup is needed: Duende detects the provider and builds with <code>ddbc</code> via dub automatically.</li>
+      </ul>
+
+      <h2>Connection strings</h2>
+      <p>Connection strings follow DDBC format. The <code>ddbc:</code> prefix is optional.</p>
+      <ul>
+        <li>SQLite (in-memory): <code>sqlite::memory:</code> or <code>ddbc:sqlite::memory:</code></li>
+        <li>SQLite (file): <code>sqlite:path/to/file.db</code></li>
+        <li>MySQL: <code>mysql://host:3306?user=USER,password=PASS</code></li>
+        <li>PostgreSQL: <code>postgresql://host:5432?user=USER,password=PASS</code></li>
+        <li>SQL Server (ODBC): <code>odbc://?dsn=NAME</code> or <code>sqlserver://host,1433?user=USER,password=PASS,driver=FreeTDS</code></li>
+      </ul>
+
+  <h2>API</h2>
+      <pre><code>import std.database
+
+let string url = "sqlite::memory:"
+var auto db = dbConnect(url)
+dbExecute(db, "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+
+// Prepared insert
+var auto st = dbPrepare(db, "INSERT INTO t (id, name) VALUES (?, ?)")
+dbBindInt(st, 1, 1)
+dbBindString(st, 2, "Alice")
+dbExecPrepared(st)
+dbCloseStmt(st)
+
+// Queries
+let string cnt = dbQueryScalar(db, "SELECT COUNT(*) FROM t")
+var auto rows = dbQueryAll(db, "SELECT id, name FROM t ORDER BY id")
+dbClose(db)
+      </code></pre>
+
+      <h3>Passing connections to functions</h3>
+      <p>You can pass a connection to other functions. Either give the parameter the explicit type <code>DBConn</code>, or use <code>auto</code> to keep it generic:</p>
+      <pre><code>void addCustomer(DBConn db, string name, int id) do
+  var auto st = dbPrepare(db, "INSERT INTO t (id, name) VALUES (?, ?)")
+  dbBindInt(st, 1, id)
+  dbBindString(st, 2, name)
+  dbExecPrepared(st)
+  dbCloseStmt(st)
+end
+
+void addCustomer2(auto db, string name, int id) do
+  // Same body as above; type is inferred at call site
+  var auto st = dbPrepare(db, "INSERT INTO t (id, name) VALUES (?, ?)")
+  dbBindInt(st, 1, id)
+  dbBindString(st, 2, name)
+  dbExecPrepared(st)
+  dbCloseStmt(st)
+end
+</code></pre>
+
+      <h2>Transactions</h2>
+      <p>Use <code>dbBegin</code>, <code>dbCommit</code>, and <code>dbRollback</code> for transaction control.</p>
+
+      <div class="see-also">See also: <a href="packages.html">Packages</a></div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

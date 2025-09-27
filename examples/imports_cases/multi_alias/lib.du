@@ -1,0 +1,3 @@
+int a() do return 1 end
+int b() do return 2 end
+int c() do return 3 end

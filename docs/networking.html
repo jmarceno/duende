@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Networking — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+  <style>
+    code.k { color: #a31515; font-weight: 600; }
+    pre { white-space: pre-wrap; }
+  </style>
+  </head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Networking</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+  <p class="muted">Duende exposes basic TCP/UDP facilities via the <code>std.networking</code> package which maps to D's <code>std.socket</code>. Import the module and use helpers like <code>tcpListen</code>, <code>tcpAccept</code>, <code>tcpConnect</code>, <code>tcpSend</code>, and <code>tcpRecvLine</code>. Non-blocking readiness with timeouts is supported via cross‑platform <em>select</em>-style polling (POSIX and Windows).</p>
+
+      <h2>Quick start (TCP)</h2>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  var int port = 9099
+  var auto listener = tcpListen(port)
+  // Spawn a one-shot echo handler so client and server run in one process
+  spawnEchoOnce(listener)
+
+  // Client side
+  var auto c = tcpConnect("127.0.0.1", port)
+  tcpSend(c, "hello", true)
+  var string reply = tcpRecvLine(c)
+  print(reply)
+  tcpClose(c)
+
+  // Close server listener
+  tcpClose(listener)
+  return 0
+end</code></pre>
+
+      <h2>Quick start (UDP)</h2>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  // Bind server on ephemeral port and echo once in background
+  var auto server = udpOpen(0)
+  var int port = udpLocalPort(server)
+  spawnUdpEchoOnce(server)
+
+  // Client sends and waits with timeout
+  var auto client = udpOpen(0)
+  udpSendTo(client, "127.0.0.1", port, "ping")
+  var string msg = udpRecv(client, 1000)  # 1s timeout
+  if msg == "" do
+    print("timeout")
+  else
+    print(msg)  # -> udp:ping
+  end
+  udpClose(client)
+  udpClose(server)
+  return 0
+end</code></pre>
+
+      <h2>API</h2>
+  <p class="muted">Available functions and types from <code>std.networking</code>:</p>
+      <h3>TCP</h3>
+      <ul>
+        <li><code>tcpListen(port: int, address: string = "127.0.0.1", backlog: int = 10) -&gt; TcpListener</code></li>
+        <li><code>tcpAccept(listener: TcpListener) -&gt; TcpSocket</code></li>
+        <li><code>tcpAcceptTimeout(listener: TcpListener, out client: TcpSocket, timeoutMs: int) -&gt; bool</code></li>
+        <li><code>tcpConnect(host: string, port: int) -&gt; TcpSocket</code></li>
+        <li><code>tcpSend(socket: TcpSocket, data: string, addNewline: bool = false) -&gt; int</code></li>
+        <li><code>tcpRecvLine(socket: TcpSocket) -&gt; string</code></li>
+        <li><code>tcpRecvLineTimeout(socket: TcpSocket, timeoutMs: int) -&gt; string</code></li>
+        <li><code>tcpRecvAll(socket: TcpSocket) -&gt; string</code></li>
+        <li><code>tcpClose(listener|socket)</code></li>
+        <li><code>spawnEchoOnce(listener: TcpListener)</code> — background one‑shot TCP echo for demos/tests</li>
+      </ul>
+      <h3>UDP</h3>
+      <ul>
+        <li><code>udpOpen(port: int = 0, address: string = "0.0.0.0") -&gt; UdpSocket</code></li>
+        <li><code>udpSendTo(socket: UdpSocket, host: string, port: int, data: string) -&gt; int</code></li>
+        <li><code>udpRecvFrom(socket: UdpSocket, out host: string, out port: int) -&gt; string</code></li>
+        <li><code>udpRecv(socket: UdpSocket, timeoutMs: int = 1000) -&gt; string</code></li>
+        <li><code>udpLocalPort(socket: UdpSocket) -&gt; int</code></li>
+        <li><code>udpClose(socket: UdpSocket)</code></li>
+        <li><code>spawnUdpEchoOnce(socket: UdpSocket)</code> — background one‑shot UDP echo for demos/tests</li>
+      </ul>
+
+      <h3>Timeouts & platform notes</h3>
+      <p>
+        Readiness waits are implemented with <code>select</code> on POSIX and Winsock <code>select</code> on Windows.
+        If neither platform macro matches, a simple sleep loop is used as a fallback. Timeout helpers return empty strings
+        (for UDP) or partial data read so far (for TCP line reads) if the timeout elapses.
+      </p>
+
+      <h2>Advanced Topics</h2>
+      <p>For advanced networking patterns, timeout handling strategies, platform-specific considerations, and multi-packet communication patterns, see <a href="advanced-networking.html">Advanced Networking</a>.</p>
+
+  <p>These helpers are provided by a Duende package, so no compiler changes are needed. See <a href="packages.html">Packages</a> for how providers are discovered. The compiler includes <code>std.networking</code> as a built-in provider and embeds its manifest for easy use. Full examples live under <code>examples/networking.du</code> and <code>examples/networking_udp.du</code>.</p>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

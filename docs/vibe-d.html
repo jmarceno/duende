@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vibe.d — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+  <style>
+    code.k { color: #a31515; font-weight: 600; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Vibe.d</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="packages.html">Packages</a>
+        <a href="networking.html">Networking</a>
+        <a href="database.html">Database</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">The <code>vibe_d</code> package provides comprehensive web development capabilities through vibe.d integration. This includes HTTP/HTTPS servers and clients, WebSocket support, SSL/TLS contexts, async operations, logging, file system operations, process management, and timers.</p>
+
+      <h2>Import</h2>
+      <pre><code>import vibe_d</code></pre>
+
+      <h2>HTTP Server</h2>
+      <p>Create and manage HTTP/HTTPS servers with automatic routing and request handling.</p>
+
+      <h3>startServer</h3>
+      <pre><code class="k">string</code> startServer(<code class="k">int</code> port, <code class="k">bool</code> https = false)</pre>
+      <p>Starts an HTTP or HTTPS server on the specified port. Returns a server ID for management.</p>
+      <pre><code>// Start HTTP server on port 8080
+let string serverId = startServer(8080, false)
+
+// Start HTTPS server on port 8443
+let string httpsServerId = startServer(8443, true)</code></pre>
+      <p>The server automatically includes default routes:</p>
+      <ul>
+        <li><code>/</code> — Returns "Hello from Duende vibe.d server!"</li>
+        <li><code>/api/test</code> — Returns JSON with message and timestamp</li>
+        <li><code>/api/echo</code> — Echoes POST request body as JSON</li>
+        <li><code>*</code> — Serves static files from current directory</li>
+      </ul>
+
+      <h2>HTTP Client</h2>
+      <p>Create HTTP clients and perform various HTTP requests.</p>
+
+      <h3>createHttpClient</h3>
+      <pre><code class="k">string</code> createHttpClient(<code class="k">string</code> baseUrl = "")</pre>
+      <p>Creates an HTTP client, optionally with a base URL. Returns a client ID.</p>
+      <pre><code>// Create generic client
+let string clientId = createHttpClient()
+
+// Create client with base URL
+let string apiClient = createHttpClient("https://api.example.com")</code></pre>
+
+      <h3>HTTP Request Methods</h3>
+      <pre><code class="k">string</code> httpGet(<code class="k">string</code> clientId, <code class="k">string</code> url)
+<code class="k">string</code> httpPost(<code class="k">string</code> clientId, <code class="k">string</code> url, <code class="k">string</code> data)
+<code class="k">string</code> httpPut(<code class="k">string</code> clientId, <code class="k">string</code> url, <code class="k">string</code> data)
+<code class="k">string</code> httpDelete(<code class="k">string</code> clientId, <code class="k">string</code> url)</pre>
+      <p>Perform HTTP requests. POST and PUT methods accept JSON data.</p>
+      <pre><code>let string clientId = createHttpClient()
+
+// GET request
+let string response = httpGet(clientId, "http://example.com/api/users")
+
+// POST request with JSON data
+let string postData = "{\"name\": \"John\", \"age\": 30}"
+let string postResponse = httpPost(clientId, "http://api.example.com/users", postData)
+
+// PUT request
+let string putResponse = httpPut(clientId, "http://api.example.com/users/123", postData)
+
+// DELETE request
+let string deleteResponse = httpDelete(clientId, "http://api.example.com/users/123")</code></pre>
+
+      <h3>HTTPS Request Methods</h3>
+      <pre><code class="k">string</code> httpsGet(<code class="k">string</code> clientId, <code class="k">string</code> url)
+<code class="k">string</code> httpsPost(<code class="k">string</code> clientId, <code class="k">string</code> url, <code class="k">string</code> data)</pre>
+      <p>Perform HTTPS requests with automatic TLS context creation.</p>
+      <pre><code>let string clientId = createHttpClient()
+
+// HTTPS GET request
+let string response = httpsGet(clientId, "https://api.github.com/users")
+
+// HTTPS POST request
+let string secureData = "{\"message\": \"secure data\"}"
+let string httpsResponse = httpsPost(clientId, "https://api.example.com/secure", secureData)</code></pre>
+
+      <h2>WebSocket</h2>
+      <p>Create WebSocket servers and clients for real-time communication.</p>
+
+      <h3>createWebSocketServer</h3>
+      <pre><code class="k">string</code> createWebSocketServer(<code class="k">int</code> port, <code class="k">string</code> path = "/ws")</pre>
+      <p>Creates a WebSocket server on the specified port and path. Automatically handles ping/pong and echo functionality.</p>
+      <pre><code>// Create WebSocket server on port 9001
+let string wsServerId = createWebSocketServer(9001, "/websocket")
+
+// Create on default path /ws
+let string defaultWsId = createWebSocketServer(8080)</code></pre>
+
+      <h3>connectWebSocket</h3>
+      <pre><code class="k">string</code> connectWebSocket(<code class="k">string</code> url)</pre>
+      <p>Connects to a WebSocket server. Returns a connection ID.</p>
+      <pre><code>let string wsConnectionId = connectWebSocket("ws://localhost:9001/websocket")</code></pre>
+
+      <h2>SSL/TLS</h2>
+      <p>Manage SSL/TLS contexts for secure communications.</p>
+
+      <h3>createTlsContext</h3>
+      <pre><code class="k">string</code> createTlsContext(<code class="k">int</code> kind = 0)</pre>
+      <p>Creates a TLS context. Kind: 0 for client, 1 for server.</p>
+      <pre><code>// Create client TLS context
+let string clientTls = createTlsContext(0)
+
+// Create server TLS context
+let string serverTls = createTlsContext(1)</code></pre>
+
+      <h2>Async Operations</h2>
+      <p>Handle timers, timeouts, and asynchronous operations.</p>
+
+      <h3>Timers</h3>
+      <pre><code class="k">string</code> createTimer(<code class="k">int</code> intervalMs, <code class="k">bool</code> repeat = false)
+<code class="k">string</code> setTimeout(<code class="k">int</code> timeoutMs)</pre>
+      <p>Create timers and timeouts. Timers can be repeating or one-shot.</p>
+      <pre><code>// Create repeating timer (every 1 second)
+let string timerId = createTimer(1000, true)
+
+// Create one-shot timer
+let string oneShot = createTimer(5000, false)
+
+// Set timeout (one-shot, no repeat)
+let string timeoutId = setTimeout(2000)</code></pre>
+
+      <h3>Event Loop</h3>
+      <pre><code>runEventLoop()
+exitEventLoop()</pre>
+      <p>Control the event loop for async operations.</p>
+      <pre><code>// Start event loop (runs for demo period)
+runEventLoop()
+
+// Stop event loop
+exitEventLoop()</code></pre>
+
+      <h2>File System</h2>
+      <p>Async file and directory operations.</p>
+
+      <h3>File Operations</h3>
+      <pre><code class="k">string</code> readFileAsync(<code class="k">string</code> filename)
+<code class="k">bool</code> writeFileAsync(<code class="k">string</code> filename, <code class="k">string</code> content)</pre>
+      <p>Asynchronously read and write files.</p>
+      <pre><code>// Write file
+let bool writeSuccess = writeFileAsync("data.txt", "Hello, World!")
+
+// Read file
+let string content = readFileAsync("data.txt")</code></pre>
+
+      <h3>Directory Operations</h3>
+      <pre><code class="k">bool</code> createDirectoryAsync(<code class="k">string</code> dirname)</pre>
+      <p>Asynchronously create directories.</p>
+      <pre><code>let bool dirSuccess = createDirectoryAsync("new_directory")</code></pre>
+
+      <h2>Process Management</h2>
+      <p>Spawn and manage external processes.</p>
+
+      <h3>spawnProcess</h3>
+      <pre><code class="k">string</code> spawnProcess(<code class="k">string</code> command, <code class="k">string[]</code> args = [])</pre>
+      <p>Spawns an external process with optional arguments. Returns a process ID.</p>
+      <pre><code>// Spawn simple command
+let string processId = spawnProcess("ls")
+
+// Spawn with arguments
+let string processWithArgs = spawnProcess("ls", ["-la", "/tmp"])</code></pre>
+
+      <h2>Logging</h2>
+      <p>Comprehensive logging system with multiple levels.</p>
+
+      <h3>Logger Creation</h3>
+      <pre><code class="k">string</code> createLogger(<code class="k">string</code> name, <code class="k">int</code> level = 3)</pre>
+      <p>Creates a logger with specified name and level. Levels: 0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical.</p>
+      <pre><code>// Create logger with warning level
+let string logger = createLogger("MyApp", 3)
+
+// Create debug logger
+let string debugLogger = createLogger("Debug", 1)</code></pre>
+
+      <h3>Logging Methods</h3>
+      <pre><code>logInfo(<code class="k">string</code> message)
+logError(<code class="k">string</code> message)
+logWarn(<code class="k">string</code> message)
+logDebug(<code class="k">string</code> message)</pre>
+      <p>Log messages at different levels.</p>
+      <pre><code>let string logger = createLogger("MyApp", 2)
+
+logInfo("Application started")
+logWarn("This is a warning")
+logError("An error occurred")
+logDebug("Debug information")</code></pre>
+
+      <h2>Complete Example</h2>
+      <p>Here's a comprehensive example demonstrating various vibe.d features:</p>
+      <pre><code>import vibe_d
+
+// 1. Create logger
+let string logger = createLogger("WebApp", 2)
+logInfo("Starting web application")
+
+// 2. Setup TLS contexts
+let string clientTls = createTlsContext(0)
+let string serverTls = createTlsContext(1)
+
+// 3. Start HTTP server
+let string serverId = startServer(8080, false)
+logInfo("HTTP server started on port 8080")
+
+// 4. Create WebSocket server
+let string wsId = createWebSocketServer(9001, "/chat")
+logInfo("WebSocket server started on port 9001")
+
+// 5. Setup HTTP client
+let string clientId = createHttpClient()
+
+// 6. File operations
+let bool writeSuccess = writeFileAsync("app.log", "Application started")
+if writeSuccess do
+    logInfo("Log file created successfully")
+end
+
+// 7. Create timers
+let string heartbeat = createTimer(30000, true)  // 30 second heartbeat
+let string startup = setTimeout(5000)            // 5 second startup delay
+
+// 8. Spawn monitoring process
+let string monitor = spawnProcess("ps", ["aux"])
+
+logInfo("Web application initialization complete")
+
+// 9. Test API endpoint
+let string response = httpGet(clientId, "http://localhost:8080/api/test")
+logInfo("API test completed")
+
+</code></pre>
+
+      <div class="see-also">See also: <a href="packages.html">Packages</a> · <a href="networking.html">Networking</a> · <a href="database.html">Database</a> · <a href="file-io.html">File I/O</a></div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

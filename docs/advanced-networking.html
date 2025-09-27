@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Advanced Networking — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+  <style>
+    code.k { color: #a31515; font-weight: 600; }
+    pre { white-space: pre-wrap; }
+  </style>
+  </head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Advanced Networking</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="networking.html">Networking</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+  <p class="muted">This page covers advanced networking patterns in Duende, including timeout handling, platform-specific behaviors, and multi-packet communication patterns. For basic networking APIs, see the <a href="networking.html">Networking</a> page.</p>
+
+      <h2>Timeout Handling</h2>
+      <p>Duende's networking package provides timeout-aware functions to prevent indefinite blocking on I/O operations. These are essential for robust network applications.</p>
+
+      <h3>TCP timeouts</h3>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  var auto listener = tcpListen(8080)
+  spawnEchoOnce(listener)  // Background echo server
+  
+  var auto client = tcpConnect("127.0.0.1", 8080)
+  tcpSend(client, "hello", true)
+  
+  // Timeout on receive - returns empty string if timeout elapses
+  var string response = tcpRecvLineTimeout(client, 5000)  // 5 second timeout
+  if response == "" do
+    print("Server didn't respond within 5 seconds")
+  else
+    print("Got response: " + response)
+  end
+  
+  tcpClose(client)
+  tcpClose(listener)
+  return 0
+end</code></pre>
+
+      <h3>UDP timeouts</h3>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  var auto server = udpOpen(0)
+  var int port = udpLocalPort(server)
+  spawnUdpEchoOnce(server)  // Background echo
+  
+  var auto client = udpOpen(0)
+  udpSendTo(client, "127.0.0.1", port, "ping")
+  
+  // UDP recv with configurable timeout
+  var string reply = udpRecv(client, 2000)  // 2 second timeout
+  if reply == "" do
+    print("No UDP response within 2 seconds")
+  else
+    print("UDP reply: " + reply)
+  end
+  
+  udpClose(client)
+  udpClose(server)
+  return 0
+end</code></pre>
+
+      <h3>Accept timeouts</h3>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  var auto listener = tcpListen(8080)
+  
+  // Non-blocking accept with timeout
+  var TcpSocket client
+  var bool gotConnection = tcpAcceptTimeout(listener, client, 3000)  // 3 seconds
+  
+  if gotConnection do
+    print("Client connected!")
+    tcpSend(client, "Welcome!", true)
+    tcpClose(client)
+  else
+    print("No connection within 3 seconds")
+  end
+  
+  tcpClose(listener)
+  return 0
+end</code></pre>
+
+      <h2>Platform Nuances</h2>
+      <p>Duende's networking layer abstracts platform differences, but understanding the underlying implementations helps with debugging and performance tuning.</p>
+
+      <h3>Cross-platform select implementation</h3>
+      <p>The timeout functionality uses different mechanisms on different platforms:</p>
+      <ul>
+        <li><strong>POSIX systems</strong> (Linux, macOS, BSD): Uses standard <code>select()</code> system call</li>
+        <li><strong>Windows</strong>: Uses Winsock's <code>select()</code> implementation</li>
+        <li><strong>Fallback</strong>: Simple sleep loop if platform detection fails</li>
+      </ul>
+
+      <h3>Platform-specific code structure</h3>
+      <pre><code class="language-d">// In duende_net.d helper module
+version(Posix) {
+    // POSIX select implementation
+    import core.sys.posix.sys.select;
+    // ... POSIX-specific code
+} else version(Windows) {
+    // Windows Winsock select implementation
+    import core.sys.windows.winsock2;
+    // ... Windows-specific code
+} else {
+    // Fallback implementation
+    import core.thread : Thread;
+    import core.time : dur;
+    // ... fallback polling
+}</code></pre>
+
+      <h3>Socket behavior differences</h3>
+      <ul>
+        <li><strong>Address binding</strong>: POSIX allows immediate reuse of addresses with SO_REUSEADDR, Windows may require SO_REUSEADDR and has different TIME_WAIT behavior</li>
+        <li><strong>Error codes</strong>: POSIX uses errno values, Windows uses WSAGetLastError()</li>
+        <li><strong>Blocking behavior</strong>: Both platforms support non-blocking sockets, but error handling differs</li>
+      </ul>
+
+      <h2>Multi-Packet Patterns</h2>
+      <p>Real-world network applications often need to handle multiple packets, streaming data, or request-response cycles.</p>
+
+      <h3>TCP streaming with line protocols</h3>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  var auto listener = tcpListen(8080)
+  print("Server listening on port 8080")
+  
+  // Accept multiple connections
+  while true do
+    var TcpSocket client
+    var bool gotClient = tcpAcceptTimeout(listener, client, 1000)
+    if not gotClient do
+      continue  // Try again
+    end
+    
+    print("Client connected")
+    
+    // Handle multiple lines from this client
+    while true do
+      var string line = tcpRecvLineTimeout(client, 5000)
+      if line == "" do
+        print("Client timeout or disconnect")
+        break
+      end
+      
+      if line == "quit" do
+        tcpSend(client, "Goodbye!", true)
+        break
+      end
+      
+      // Echo with prefix
+      tcpSend(client, "Echo: " + line, true)
+    end
+    
+    tcpClose(client)
+  end
+  
+  tcpClose(listener)
+  return 0
+end</code></pre>
+
+      <h3>UDP message patterns</h3>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  var auto server = udpOpen(9090)
+  print("UDP server on port 9090")
+  
+  // Handle multiple UDP messages
+  while true do
+    var string host
+    var int port
+    var string msg = udpRecvFrom(server, host, port)
+    
+    if msg == "" do
+      continue  // Keep listening
+    end
+    
+    print("From " + host + ":" + string(port) + " -> " + msg)
+    
+    if msg == "ping" do
+      udpSendTo(server, host, port, "pong")
+    elif msg == "time" do
+      udpSendTo(server, host, port, "TODO: current time")
+    elif msg == "quit" do
+      udpSendTo(server, host, port, "bye")
+      break
+    else
+      udpSendTo(server, host, port, "unknown: " + msg)
+    end
+  end
+  
+  udpClose(server)
+  return 0
+end</code></pre>
+
+      <h3>Request-response with correlation</h3>
+      <pre><code class="language-du">import std.networking
+
+// Simple request-response pattern
+int sendRequest(TcpSocket sock, string request) do
+  tcpSend(sock, request, true)
+  var string response = tcpRecvLineTimeout(sock, 3000)
+  if response == "" do
+    print("Request timeout: " + request)
+    return -1
+  end
+  print("Request: " + request + " -> Response: " + response)
+  return 0
+end
+
+int main() do
+  var auto listener = tcpListen(8080)
+  spawnEchoOnce(listener)  // Simple echo server
+  
+  var auto client = tcpConnect("127.0.0.1", 8080)
+  
+  // Send multiple requests in sequence
+  sendRequest(client, "hello")
+  sendRequest(client, "world")
+  sendRequest(client, "duende")
+  
+  tcpClose(client)
+  tcpClose(listener)
+  return 0
+end</code></pre>
+
+      <h2>Error Handling & Debugging</h2>
+      <p>Network operations can fail in various ways. Here are common patterns for robust error handling:</p>
+
+      <h3>Connection failures</h3>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  // Try to connect to a service that might not be running
+  var auto sock = tcpConnect("127.0.0.1", 12345)  // May fail
+  
+  // In real code, you'd want to handle connection errors
+  // For now, Duende doesn't expose detailed error info
+  // But you can implement retry logic:
+  
+  var int retries = 3
+  while retries > 0 do
+    // Attempt operation
+    tcpSend(sock, "test", true)
+    var string response = tcpRecvLineTimeout(sock, 1000)
+    
+    if response != "" do
+      print("Success: " + response)
+      break
+    end
+    
+    retries = retries - 1
+    print("Retry remaining: " + string(retries))
+  end
+  
+  tcpClose(sock)
+  return 0
+end</code></pre>
+
+      <h3>Graceful shutdown</h3>
+      <pre><code class="language-du">import std.networking
+
+int main() do
+  var auto listener = tcpListen(8080)
+  var bool shutdown = false
+  
+  // In a real application, you'd handle signals
+  // For demo purposes, we'll use a counter
+  var int connections = 0
+  
+  while not shutdown do
+    var TcpSocket client
+    var bool gotClient = tcpAcceptTimeout(listener, client, 1000)
+    
+    if gotClient do
+      connections = connections + 1
+      print("Connection #" + string(connections))
+      
+      tcpSend(client, "Hello client #" + string(connections), true)
+      tcpClose(client)
+      
+      // Shutdown after 3 connections for demo
+      if connections >= 3 do
+        shutdown = true
+      end
+    end
+  end
+  
+  print("Shutting down gracefully")
+  tcpClose(listener)
+  return 0
+end</code></pre>
+
+      <h2>Performance Considerations</h2>
+      <ul>
+        <li><strong>Buffer sizes</strong>: D's socket implementation uses reasonable defaults, but large transfers may benefit from chunked reading</li>
+        <li><strong>Connection pooling</strong>: For high-frequency client applications, consider reusing connections</li>
+        <li><strong>Timeout tuning</strong>: Shorter timeouts improve responsiveness but may cause false failures on slow networks</li>
+        <li><strong>Select limitations</strong>: The select-based timeout implementation has platform-specific limits on file descriptor numbers</li>
+      </ul>
+
+      <h2>Best Practices</h2>
+      <ul>
+        <li>Always use timeouts for network operations in production code</li>
+        <li>Implement proper error handling and retry logic</li>
+        <li>Close sockets explicitly to avoid resource leaks</li>
+        <li>Use background helpers (spawnEchoOnce, etc.) only for testing and demos</li>
+        <li>Test your networking code on target platforms, especially if targeting both POSIX and Windows</li>
+        <li>Consider using UDP for fire-and-forget messaging, TCP for reliable data transfer</li>
+      </ul>
+
+  <p>For basic networking usage, see the main <a href="networking.html">Networking</a> documentation. The networking package is built-in to Duende and requires no additional dependencies.</p>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

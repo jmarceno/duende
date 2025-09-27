@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Async — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+  <style>
+    code.k { color: #a31515; font-weight: 600; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Async</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">Duende provides lightweight async-style concurrency via a package, built on D fibers. Import <code>std.async</code> to use it without changing the compiler.</p>
+
+      <h2>Overview</h2>
+      <ul>
+        <li>Cooperative scheduler implemented in D using <code>core.thread.fiber</code>.</li>
+        <li>API: <code>spawn(fn)</code>, <code>run()</code>, <code>yieldNow()</code>, <code>sleepAsync(ms)</code>, <code>awaitReadable(handle, timeoutMs=0)</code>.</li>
+        <li>Works alongside <code>std.networking</code> helpers; you can mix blocking and non-blocking flows as needed.</li>
+        <li>Cross-platform: uses <code>select()</code> on POSIX/Windows when awaiting socket readability.</li>
+      </ul>
+      <h2>Available functions</h2>
+      <ul>
+        <li><code>spawn(fn: () -&gt; void)</code> and <code>spawn(fn: (int) -&gt; int)</code></li>
+        <li><code>run()</code></li>
+        <li><code>yieldNow()</code></li>
+        <li><code>sleepAsync(ms: int)</code></li>
+        <li><code>awaitReadable(handle: int, timeoutMs: int = 0)</code></li>
+      </ul>
+
+      <h2>Usage</h2>
+      <pre><code class="language-duende">import std.async
+import std.networking
+
+int main() do
+  let int port = 9101
+  var auto listener = tcpListen(port)
+  spawnEchoOnce(listener)
+
+  spawn({ ->
+    var auto c = tcpConnect("127.0.0.1", port)
+    tcpSend(c, "hello", true)
+    yieldNow() // let other tasks run
+    var string line = tcpRecvLine(c)
+    print(line)
+    tcpClose(c)
+  })
+
+  run() // process all tasks
+  tcpClose(listener)
+  return 0
+end</code></pre>
+
+      <h2>Sockets and non-blocking IO</h2>
+      <p>For advanced scenarios, use <code>awaitReadable(handle, timeoutMs)</code> to cooperatively wait for a socket to be ready without blocking the scheduler. The handle can be obtained from <code>std.networking</code> sockets via <code>sock.sock.handle</code>.</p>
+
+      <pre><code>import std.async
+import std.networking
+
+var auto c = tcpConnect("127.0.0.1", 8080)
+// await readable for up to 1000ms before trying to recv
+awaitReadable(c.sock.handle, 1000)
+var string data = tcpRecvLine(c)</code></pre>
+
+      <h2>Notes</h2>
+      <ul>
+        <li>The scheduler is cooperative: a task must yield (via <code>yieldNow</code>, <code>sleepAsync</code>, or <code>awaitReadable</code>) to let others progress.</li>
+        <li><code>run()</code> processes tasks until the queue empties.</li>
+      </ul>
+
+      <div class="see-also">See also: <a href="packages.html">Packages</a> · <a href="networking.html">Networking</a></div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+  </body>
+  </html>

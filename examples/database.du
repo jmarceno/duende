@@ -1,0 +1,65 @@
+import std.database
+
+// Database example using SQLite via ddbc through Duende's std.database package.
+// Demonstrates: connect, DDL, prepared statements, transactions, queries.
+let string url = "sqlite::memory:"
+var auto db = dbConnect(url)
+
+int main() do
+  // Use in-memory SQLite for tests
+
+  // Create schema
+  dbExecute(db, "DROP TABLE IF EXISTS users")
+  dbExecute(db, "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER NOT NULL)")
+
+  // Insert with prepared statement
+  var auto ins = dbPrepare(db, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)")
+  // Row 1
+  dbBindInt(ins, 1, 1)
+  dbBindString(ins, 2, "Alice")
+  dbBindInt(ins, 3, 30)
+  dbExecPrepared(ins)
+  // Row 2
+  dbBindInt(ins, 1, 2)
+  dbBindString(ins, 2, "Bob")
+  dbBindInt(ins, 3, 25)
+  dbExecPrepared(ins)
+  // Row 3
+  dbBindInt(ins, 1, 3)
+  dbBindString(ins, 2, "Carol")
+  dbBindInt(ins, 3, 27)
+  dbExecPrepared(ins)
+  dbCloseStmt(ins)
+
+  // Simple scalar query
+  let string cnt = dbQueryScalar(db, "SELECT COUNT(*) FROM users")
+  print(cnt)
+
+  // Transaction with rollback: try to insert duplicate id -> rollback, count stays the same
+  dbBegin(db)
+  var auto ins2 = dbPrepare(db, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)")
+  // Insert a new row within tx, then rollback to keep deterministic state
+  dbBindInt(ins2, 1, 4)
+  dbBindString(ins2, 2, "Temp")
+  dbBindInt(ins2, 3, 99)
+  dbExecPrepared(ins2)
+  dbCloseStmt(ins2)
+  dbRollback(db)
+
+  // Verify count unchanged
+  let string cnt2 = dbQueryScalar(db, "SELECT COUNT(*) FROM users")
+  print(cnt2)
+
+  // Update and fetch rows
+  dbExecute(db, "UPDATE users SET age = age + 1 WHERE id = 2")
+  // Query all and print a couple of fields to assert correctness
+  var auto rows = dbQueryAll(db, "SELECT name, age FROM users ORDER BY id")
+  // Expecting 3 rows; print "name:age" for first and last
+  var string first = "${rows[0][0]}:${rows[0][1]}"
+  var string last = "${rows[2][0]}:${rows[2][1]}"
+  print(first)
+  print(last)
+
+  dbClose(db)
+  return 0
+end

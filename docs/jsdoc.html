@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JSDoc — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>JSDoc-style Comments</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="syntax.html">Syntax</a>
+        <a href="functions.html">Functions</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <section class="panel">
+        <h2>Overview</h2>
+        <p>Duende supports JSDoc-style block comments using <code>/** ... */</code>. At this stage, these comments are treated like regular comments by the lexer and parser and are ignored during compilation.</p>
+      </section>
+
+      <h3>Example</h3>
+      <pre><code>/**
+ * Adds two integers and returns the sum.
+ * @param {int} a - First addend.
+ * @param {int} b - Second addend.
+ * @returns {int} Sum of a and b.
+ */
+int add(int a, int b) do
+    return a + b
+end
+
+/** Entry point */
+int main() do
+    let int s = add(2, 3)
+    print(s)
+end
+</code></pre>
+
+      <p>Future phases may parse and surface JSDoc for tooling (e.g., hover docs, type hints). For now, you can freely document your code without affecting behavior.</p>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

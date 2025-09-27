@@ -1,0 +1,34 @@
+// Hashing & Digest example using std.hash provider
+import std.hash
+
+int main() do
+
+    let string s = "abc"
+    let string t = "The quick brown fox jumps over the lazy dog"
+
+    // Hex digests
+    print(md5(s))
+    print(sha1(s))
+    print(sha224(s))
+    print(sha256(s))
+    print(sha384(s))
+    print(sha512(s))
+    print(sha512_224(s))
+    print(sha512_256(s))
+
+    // CRCs (decimal)
+    print(crc32(s))
+    print(crc64(s))
+
+    // MurmurHash3 (x86_32) with two seeds
+    print(murmurhash3(s))         // default seed 0
+    print(murmurhash3(s, 42))
+
+    // Run against a longer string too
+    print(md5(t))
+    print(sha256(t))
+    print(crc32(t))
+    print(crc64(t))
+    print(murmurhash3(t))
+    print(murmurhash3(t, 42))
+end

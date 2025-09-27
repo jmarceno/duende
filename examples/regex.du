@@ -1,0 +1,25 @@
+int main() do
+    let auto reg = regex("(\\w+)") // We check at compile time if the expression is valid, if not we throw a compilation error with the line content, number and the error reason. If this is variable and can't be check at compile time, don't do anything
+
+    // test if regex matches
+    if reg.test("hello") do
+        print("Match found!")
+    end
+
+    // match first occurrence
+    let auto match_first = reg.matchFirst("hello world")
+    print(match_first.hit) // should print "hello"
+    print(match_first.empty) // should print false if match found
+
+    // match all occurrences
+    let auto matches = reg.matchAll("Hello, duende 123!")
+    print(matches.length)
+    if matches.length > 0 do
+        let auto first_res = matches[0]
+        print(first_res.hit)
+    end
+
+    // replacement functionality
+    let string replaced = reg.replace("hello world", "WORD")
+    print(replaced) // should print "WORD world"
+end

@@ -1,0 +1,26 @@
+// others.du — Demonstrates OS/CPU builtins and command-line args
+
+// Print system information (values vary across systems)
+print("OS: ${osName()} - ${osVersion()}")
+print("CPU: ${cpuArch()}")
+
+// Simple CLI: greet and sum numbers
+// Usage: others <name> <n1> <n2> ...
+let list<string> av = args()
+if av.length == 0 do
+    print("Usage: others <name> <n1> <n2> ...")
+else
+    let string name = av[0]
+    print("Hello ${name}")
+
+    // Parse remaining args as integers and sum them, ignoring non-numbers
+    var int total = 0
+    for i in 1 .. av.length - 1 do
+        let string s = av[i]
+        // crude numeric check: digits only
+        if s.matches(regex("^[-]?\\d+$")) do
+            total = total + s.toInt()
+        end
+    end
+    print("Sum=${total}")
+end

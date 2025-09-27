@@ -1,0 +1,35 @@
+// Validate non-constant global variable initializers execute in source order
+// and that globals are readable inside main and normal functions.
+
+int gen(int x) do
+    // side-effect to verify initializer order
+    print("gen:${x}")
+    return x + 1
+end
+
+string up(string s) do
+    // side-effect to verify initializer order
+    print("up:${s}")
+    return s.toUpperCase()
+end
+
+// Global variables with non-constant initializers
+let int a = gen(1)          // prints: gen:1, then a = 2
+let string msg = up("hi")   // prints: up:hi, then msg = "HI"
+let int c = a + 5            // c = 7
+
+// Normal function that uses globals
+int delta() do
+    // Uses global c and a
+    return c - a
+end
+
+int main() do
+    // Access globals inside main
+    print("A:${a}")
+    print("MSG:${msg}")
+    print("C:${c}")
+    // Access via a normal function that reads globals
+    print("func:${delta()}")
+    return 0
+end

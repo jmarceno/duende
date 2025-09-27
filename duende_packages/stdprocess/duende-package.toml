@@ -1,0 +1,10 @@
+name = "duende-std-process"
+version = "0.1.0"
+
+description = "Process management for Duende, mapping std.process and helpers"
+
+[modules.std.process]
+imports = ["std.process", "std.stdio", "core.thread", "std.array", "std.string", "duende_packages.stdprocess.duende_process"]
+aliases = { Pid = "std.process.Pid", ProcessPipes = "std.process.ProcessPipes", Redirect = "std.process.Redirect", Config = "std.process.Config", environment = "std.process.environment", spawnProcess = "std.process.spawnProcess", wait = "std.process.wait", tryWait = "std.process.tryWait", pipeProcess = "std.process.pipeProcess", spawnShell = "std.process.spawnShell", pipeShell = "std.process.pipeShell", kill = "std.process.kill", execute = "duende_packages.stdprocess.duende_process.execute", executeShell = "duende_packages.stdprocess.duende_process.executeShell", readAllStdout = "duende_packages.stdprocess.duende_process.readAllStdout", readAllStderr = "duende_packages.stdprocess.duende_process.readAllStderr" }
+helpers = ["duende_process.d"]
+reexports = []

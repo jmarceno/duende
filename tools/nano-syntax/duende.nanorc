@@ -1,0 +1,25 @@
+##
+## Syntax highlighting for Duende language (.du and .duende files)
+## Simplified version with just keywords and comments
+##
+
+syntax "duende" "\.(du|duende)$"
+
+# Comments
+color gray "//.*$"
+color gray start="/\*" end="\*/"
+
+# Control flow keywords
+color red "\<(if|else|elif|match|while|for|in|return|break|continue|defer|do|end)\>"
+
+# Declaration keywords
+color green "\<(let|var|import|struct|enum|frame|protocol)\>"
+
+# Type Keywords
+color green "\<(auto|int|float|string|bool|void|bytes|list|dict)\>"
+
+# Built-in functions
+# color yellow "\<(print|println|error|warn|debug|input)\>"
+
+# Constants
+color magenta "\<(true|false|this|Ok|Error|Maybe|Some|Result|None)\>"

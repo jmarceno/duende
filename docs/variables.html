@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Variables — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Variables</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="syntax.html">Syntax</a>
+        <a href="types.html">Types</a>
+        <a href="structs-frames.html">Structs & Frames</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>let vs var</h2>
+      <ul>
+        <li><code>let</code> declares an immutable binding.</li>
+        <li><code>var</code> declares a mutable binding (you can assign a new value).</li>
+      </ul>
+      <pre><code>let int x = 42
+var int y = 13
+y = y + 1
+print(x + y)
+</code></pre>
+
+      <h2>Global Variables</h2>
+      <p>Variables declared outside of functions, frames, or structs are treated as <strong>global variables</strong>. They are accessible from any function, frame, or struct within the same module.</p>
+      
+      <h3>Global Variable Declaration</h3>
+      <ul>
+        <li>Global variables are declared at the module level (outside any function)</li>
+        <li>They can be either immutable (<code>let</code>) or mutable (<code>var</code>)</li>
+        <li>Global variables are initialized when the program starts</li>
+        <li>They maintain their values throughout the program execution</li>
+      </ul>
+      
+      <pre><code>// Global constants
+let float pi = 3.141592653589793
+let int maxUsers = 1000
+
+// Global mutable state
+var int requestCount = 0
+var string lastUser = ""
+
+void processRequest(string username) do
+    requestCount = requestCount + 1
+    lastUser = username
+    print("Request #" + requestCount + " from " + username)
+end
+
+int main() do
+    print("Pi value: " + pi)        // Access global constant
+    print("Max users: " + maxUsers) // Access global constant
+    
+    processRequest("alice")         // Modifies global state
+    processRequest("bob")           // Modifies global state
+    
+    print("Total requests: " + requestCount) // Access modified global
+    print("Last user: " + lastUser)         // Access modified global
+end
+</code></pre>
+
+      <h3>Scope Resolution</h3>
+      <ul>
+        <li>Local variables can shadow global variables within their scope</li>
+        <li>When a local variable has the same name as a global, the local takes precedence</li>
+        <li>Global variables cannot be re-declared within local scopes</li>
+      </ul>
+      
+      <pre><code>let string globalName = "Global"
+
+void testScope() do
+    let string globalName = "Local"  // Shadows global variable
+    print(globalName)                // Prints "Local"
+end
+
+int main() do
+    print(globalName)  // Prints "Global"
+    testScope()        // Prints "Local"
+    print(globalName)  // Prints "Global" again
+end
+</code></pre>
+
+      <h2>Local Variables</h2>
+      <p>Variables declared inside functions, frames, or structs are local to that scope.</p>
+
+      <h2>Struct and frame rules</h2>
+      <ul>
+        <li>Struct fields are immutable. Methods return new values rather than modifying in place.</li>
+        <li>Frames are mutable; methods can change fields in place.</li>
+        <li>Declaring a struct with <code>var</code> is disallowed; use <code>let</code>. See <a href="structs-frames.html">Structs & Frames</a>.</li>
+      </ul>
+
+      <div class="see-also">
+        See also: <a href="control-flow.html">Control Flow</a>, <a href="functions.html">Functions</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

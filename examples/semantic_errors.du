@@ -1,0 +1,69 @@
+// This example demonstrates semantic errors that should be caught by the Duende compiler
+// Focus on the errors that we know are properly implemented
+
+// ERROR 1: Using break outside of a loop
+int testBreakOutsideLoop() do
+    if true do
+        break  // Error: Invalid use of 'break' outside of a loop
+    end
+    return 0
+end
+
+// ERROR 2: Using continue outside of a loop
+int testContinueOutsideLoop() do
+    let int x = 5
+    if x > 0 do
+        continue  // Error: Invalid use of 'continue' outside of a loop
+    end
+    return x
+end
+
+// ERROR 3: Break in nested function (should reset loop context)
+int testBreakInNestedFunction() do
+    for i in range(1, 5) do
+        int nestedFunc() do
+            break  // Error: break is invalid here even though we're inside a for loop context
+        end
+        nestedFunc()
+    end
+    return 0
+end
+
+// ERROR 4: Continue in nested function (should reset loop context)
+int testContinueInNestedFunction() do
+    var int sum = 0
+    for i in range(1, 10) do
+        int innerFunc() do
+            continue  // Error: continue is invalid here even though we're inside a for loop context
+        end
+        innerFunc()
+        sum = sum + i
+    end
+    return sum
+end
+
+// ERROR 5: Break in match statement
+int testBreakInMatch() do
+    let int value = 42
+    match value do
+        42 -> break  // Error: break outside loop (match is not a loop)
+        _ -> return 0
+    end
+    return 1
+end
+
+// ERROR 6: Continue in match statement
+int testContinueInMatch() do
+    let int value = 42
+    match value do
+        42 -> continue  // Error: continue outside loop (match is not a loop)
+        _ -> return 0
+    end
+    return 1
+end
+
+// This main function should never be reached due to semantic errors above
+int main() do
+    print("This should not compile due to semantic errors")
+    return 0
+end

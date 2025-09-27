@@ -1,0 +1,10 @@
+import modules.testModule // Import the whole module
+import modules.otherModule {subtract} // Import just the specific symbol subtract its dependecies
+
+
+int main() do
+
+    print(testModule.add(1,2))
+    print(otherModule.subtract(2,4))
+
+end

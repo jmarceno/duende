@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JSON — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>JSON</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+  <p>This example uses the bundled <code>std.json</code> provider.</p>
+  <h2>Available functions and types</h2>
+  <ul>
+    <li><code>parseJSON(text: string) -&gt; JsonValue</code></li>
+    <li><code>JsonValue.str -&gt; string</code> — returns the string value</li>
+    <li><code>JsonValue.floating -&gt; float</code> — returns the numeric value</li>
+  <li><code>JsonValue.array -&gt; list&lt;JsonValue&gt;</code> — returns an array of <code>JsonValue</code></li>
+    <li><code>JsonValue["key"] -&gt; JsonValue</code> — object key access</li>
+    <li><code>JsonValue[index] -&gt; JsonValue</code> — array index access</li>
+  </ul>
+  <pre><code>import std.json
+
+let string text = "{\"language\":\"D\",\"list\":[\"a\",\"b\",\"c\",\"D\"],\"rating\":3.5}"
+
+var auto j = parseJSON(text)
+print(j["language"].str)
+print(j["list"].array.length)
+print(j["list"][0].str)
+print(j["list"][3].str)
+print(j["rating"].floating)
+</code></pre>
+      <p>Run:</p>
+  <pre><code>$ ./duende examples/std_json_example.du -r
+D
+4
+a
+D
+3.5</code></pre>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

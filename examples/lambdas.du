@@ -1,0 +1,12 @@
+int main() do
+    // Lambda
+    let int x = 5
+    let auto inc = { n -> n + 1 }
+    print(inc(x)) // Should print 6
+    // Lambda with auto capture
+    let int y = 5
+    let auto incCaptured = { n -> n + y }
+    print(incCaptured(2)) // Should print 7
+
+    return 0
+end

@@ -1,0 +1,7 @@
+name = "duende-std-csv"
+version = "0.1.0"
+
+[modules.std.csv]
+imports = ["std.csv"]
+aliases = {}
+helpers = []

@@ -1,0 +1,5 @@
+import otherModule // This is here to test circular dependecies
+
+int add(int a, int b) do
+    return a + b
+end

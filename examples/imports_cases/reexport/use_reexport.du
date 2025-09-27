@@ -1,0 +1,5 @@
+import imports_cases.reexport.mod2
+
+int main() do
+    print(mod1.add(1,2))
+end

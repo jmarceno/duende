@@ -1,0 +1,7 @@
+void test() do
+    hash("test")  // Error: missing std.hash import
+end
+
+int main() do
+    test()
+end

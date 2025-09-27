@@ -1,0 +1,7 @@
+import imports_cases.circular.a
+import imports_cases.circular.b
+
+int main() do
+    print(a.fa())
+    print(b.fb())
+end

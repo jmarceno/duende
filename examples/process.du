@@ -1,0 +1,28 @@
+import std.process
+
+// Demonstrates running commands, capturing output, and waiting on processes.
+
+int main() do
+  // 1) Execute a program and capture stdout/stderr separately
+  var auto res = execute(["/bin/sh", "-c", "echo hello && echo error 1>&2"]) 
+  // Print stdout, stderr, and exit code
+  print(res.stdout.trim())
+  print(res.stderr.trim())
+  print(res.status)
+
+  // 2) Pipe a shell command and read streams
+  var auto p = pipeShell("printf out && printf err 1>&2", Redirect.all)
+  var string outStr = readAllStdout(p)
+  var string errStr = readAllStderr(p)
+  var int code = wait(p.pid)
+  print(outStr.trim())
+  print(errStr.trim())
+  print(code)
+
+  // 3) Spawn a process and wait
+  var auto pid = spawnProcess(["/bin/sh", "-c", "exit 0"]) 
+  var int status = wait(pid)
+  print(status)
+
+  return 0
+end

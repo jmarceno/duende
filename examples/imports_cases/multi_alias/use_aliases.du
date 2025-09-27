@@ -1,0 +1,7 @@
+import imports_cases.multi_alias.lib { a as aa, b as bb, c }
+
+int main() do
+    print(aa())
+    print(bb())
+    print(c())
+end

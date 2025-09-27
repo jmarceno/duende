@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>I/O — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>I/O</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="strings.html">Strings</a>
+        <a href="file-io.html">File I/O</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Available functions</h2>
+      <ul>
+        <li><code>print(x: any)</code> — prints with newline; accepts expressions and formatted strings.</li>
+        <li><code>input() -&gt; string</code></li>
+        <li><code>input(prompt: string) -&gt; string</code> (writes prompt, then reads)</li>
+      </ul>
+      <h2>print</h2>
+      <pre><code>print("Player ${name} scored ${score} points!")
+print("Next level requires ${score + 5} points")
+</code></pre>
+
+      <h2>input</h2>
+      <pre><code>let string name = input()
+print("Hello, ${name}")
+
+print("Length=${(input()).length}")
+
+let string prompted = input("Name: ")
+print("Prompted: ${prompted}")
+</code></pre>
+
+      <h2>Terminal (non-interactive)</h2>
+      <p>
+        Duende exposes a minimal <code>terminal</code> module backed by
+        <code>arsd.terminal</code> for simple TTY detection without entering
+        interactive modes. These helpers are safe in any environment and do not
+        change terminal state.
+      </p>
+      <pre><code>import terminal
+
+if Terminal.stdoutIsTerminal() do
+    print("stdout is a terminal")
+else
+    print("stdout is redirected (file/pipe)")
+end
+
+if stdinIsTerminal() do
+    print("stdin is a terminal")
+else
+    print("stdin is not interactive")
+end
+      </code></pre>
+
+      <div class="see-also">
+        See also: <a href="strings.html">Strings</a>, <a href="file-io.html">File I/O</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

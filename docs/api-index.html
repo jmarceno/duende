@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>API Index — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>API Index</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">Quick, alphabetical index of the language- and provider-level APIs. Each entry links to the page that documents the functions in detail.</p>
+
+      <h2>Core built-ins</h2>
+      <ul>
+        <li><a href="io.html">I/O</a>: <code>print(x)</code>, <code>input()</code>, <code>input(prompt)</code></li>
+        <li><a href="system.html">System</a>: <code>osName()</code>, <code>osVersion()</code>, <code>cpuArch()</code>, <code>args()</code></li>
+        <li><a href="sleep.html">sleep</a>: <code>sleep(ms)</code></li>
+        <li><a href="result-maybe.html">Result &amp; Maybe</a>: <code>Ok(...)</code>, <code>Error(...)</code>, <code>Some(...)</code>, <code>None</code>, <code>? else</code>, <code>safeCast(T, value)</code></li>
+      </ul>
+
+      <h2>Standard library providers</h2>
+      <ul>
+        <li><a href="strings.html">Strings</a>: methods like <code>split</code>, <code>replace</code>, <code>toUpperCase</code>, <code>contains</code>, <code>format</code></li>
+        <li><a href="regex.html">Regex</a>: <code>regex("...")</code>, <code>test</code>, <code>matchFirst</code>, <code>matchAll</code>, <code>replace</code></li>
+        <li><a href="bytes.html">Bytes</a>: construction, indexing, <code>toString</code>, length</li>
+        <li><a href="encoding.html">Encoding</a>: <code>toUtf8</code>/<code>fromUtf8</code>, <code>toBase64</code>/<code>fromBase64</code>, <code>toHex</code>/<code>fromHex</code></li>
+        <li><a href="hash.html">Hashing</a>: <code>md5</code>, <code>crc32</code>, <code>crc64</code>, <code>sha1</code>, <code>sha224</code>, <code>sha256</code>, <code>sha384</code>, <code>sha512</code>, <code>sha512_224</code>, <code>sha512_256</code>, <code>murmurhash3</code></li>
+        <li><a href="json.html">JSON</a>: <code>parseJSON</code>, and <code>JsonValue</code> accessors (<code>.str</code>, <code>.floating</code>, <code>.array</code>, indexing)</li>
+        <li><a href="xml.html">XML</a>: parsing, querying, modifying, and generating XML</li>
+        <li><a href="math.html">Math</a>: <code>abs</code>, <code>min</code>, <code>max</code>, <code>floor</code>, <code>ceil</code>, <code>round</code>, <code>sqrt</code>, <code>pow</code>, <code>log</code>, <code>exp</code>, trig and degree helpers</li>
+        <li><a href="dates-times.html">Dates &amp; Times</a>: <code>now</code>, <code>utcNow</code>, <code>date</code>, <code>dateTime</code>, <code>parseDate</code>, <code>formatDate</code>, arithmetic, and time zones</li>
+        <li><a href="file-io.html">File I/O</a>: <code>readText</code>, <code>writeText</code>, <code>appendText</code>, <code>readBytes</code>, <code>writeBytes</code>, <code>appendBytes</code>, <code>readLines</code>, <code>writeLines</code>, <code>appendLines</code>, <code>fileExists</code>, <code>dirExists</code>, <code>deleteFile</code>, <code>listDir</code>, <code>makeDir</code>, <code>removeDir</code>, <code>getCwd</code>, <code>fileSize</code>, <code>getMetadata</code>, <code>joinPath</code></li>
+        <li><a href="process.html">Processes</a>: <code>execute</code>, <code>executeShell</code>, <code>spawnProcess</code>, <code>pipeProcess</code>, <code>pipeShell</code>, <code>wait</code>, <code>tryWait</code>, <code>kill</code>, <code>readAllStdout</code>, <code>readAllStderr</code></li>
+        <li><a href="networking.html">Networking</a>: TCP (<code>tcpListen</code>, <code>tcpAccept</code>, <code>tcpConnect</code>, <code>tcpSend</code>, <code>tcpRecvLine</code>), UDP (<code>udpOpen</code>, <code>udpSendTo</code>, <code>udpRecv</code>, <code>udpRecvFrom</code>, <code>udpLocalPort</code>)</li>
+        <li><a href="async.html">Async</a>: futures, scheduling helpers</li>
+        <li><a href="terminal_demo.du">Terminal</a>: TTY detection via <code>terminal</code> module helpers</li>
+      </ul>
+
+      <h2>Collections</h2>
+      <ul>
+        <li><a href="collections.html">Lists &amp; Dicts</a>: fields (<code>.length</code>, <code>.keys</code>, <code>.values</code>), methods (<code>push</code>, <code>pop</code>, <code>join</code>), iteration</li>
+        <li><a href="pattern-matching.html">Pattern Matching</a>: match lists, dicts, regex, ranges</li>
+      </ul>
+
+      <h2>User-defined types</h2>
+      <ul>
+        <li><a href="structs-frames.html">Structs &amp; Frames</a>: definitions, methods, immutability/mutability</li>
+        <li><a href="enums.html">Enums</a>: declaration and comparisons</li>
+        <li><a href="protocols.html">Protocols</a>: interfaces with default methods</li>
+      </ul>
+
+      <h2>Providers and integrations</h2>
+      <ul>
+        <li><a href="packages.html">Packages</a>: provider discovery, manifests, and dub integration</li>
+        <li><a href="vibe-d.html">Vibe.d</a>: HTTP/HTTPS, WebSocket, TLS, async ops, logging, FS, processes</li>
+      </ul>
+
+      <div class="see-also">See also: <a href="imports.html">Imports</a> · <a href="syntax.html">Syntax</a></div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,75 @@
+// File I/O demo exercising read/write/append, existence, dirs, listing, size, metadata, lines, bytes, paths
+
+let Result<string> cwdRes = getCwd()
+let string cwd = cwdRes ? else ""
+
+let string tmpDir = joinPath(cwd, "io_tmp")
+
+// Ensure clean state
+if dirExists(tmpDir) do
+    removeDir(tmpDir)
+end
+
+print("dir exists before: ${dirExists(tmpDir)}")
+makeDir(tmpDir)
+print("dir exists after make: ${dirExists(tmpDir)}")
+
+let string file1 = joinPath(tmpDir, "file1.txt")
+let string file2 = joinPath(tmpDir, "file2.txt")
+let string binf = joinPath(tmpDir, "bin.dat")
+
+// Write and read text
+writeText(file1, "hello")
+print("file1 exists after write: ${fileExists(file1)}")
+match readText(file1) do
+    Ok(txt) -> print("file1 text: ${txt}")
+end
+
+// Append text
+appendText(file1, "!")
+match readText(file1) do
+    Ok(txt2) -> print("file1 text after append: ${txt2}")
+end
+
+// Lines I/O
+writeLines(file2, ["a", "b", "c"])
+let list<string> lines = readLines(file2) ? else []
+print("file2 lines count: ${lines.length}")
+print("file2 first: ${lines[0]}")
+print("file2 last: ${lines[lines.length - 1]}")
+
+// Bytes I/O
+let bytes data = [1, 2, 255]
+writeBytes(binf, data)
+match readBytes(binf) do
+    Ok(b) -> print("bytes length: ${b.length}")
+end
+match readBytes(binf) do
+    Ok(b) -> print("bytes first: ${b[0]}")
+end
+match readBytes(binf) do
+    Ok(b) -> print("bytes last: ${b[b.length - 1]}")
+end
+
+// File size and metadata (only assert stable fields)
+match fileSize(file1) do
+    Ok(sz) -> print("file1 size: ${sz}")
+end
+
+match getMetadata(file1) do
+    Ok(meta) -> print("meta isFile: ${meta[\"isFile\"]}")
+end
+match getMetadata(file1) do
+    Ok(meta) -> print("meta size: ${meta[\"size\"]}")
+end
+
+// Directory listing
+match listDir(tmpDir) do
+    Ok(entries) -> print("dir entries: ${entries.length}")
+end
+
+// Delete file and dir
+deleteFile(file1)
+print("file1 exists after delete: ${fileExists(file1)}")
+removeDir(tmpDir)
+print("dir exists after remove: ${dirExists(tmpDir)}")

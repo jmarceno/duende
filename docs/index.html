@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Duende Language Docs</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Duende Language Documentation</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="api-index.html">API Index</a>
+        <a href="syntax.html">Syntax</a>
+        <a href="types.html">Types</a>
+        <a href="variables.html">Variables</a>
+        <a href="control-flow.html">Control Flow</a>
+        <a href="functions.html">Functions</a>
+        <a href="lambdas.html">Lambdas</a>
+        <a href="collections.html">Collections</a>
+        <a href="strings.html">Strings</a>
+        <a href="bytes.html">Bytes</a>
+        <a href="structs-frames.html">Structs & Frames</a>
+        <a href="enums.html">Enums</a>
+        <a href="protocols.html">Protocols</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+        <a href="result-maybe.html">Result & Maybe</a>
+        <a href="math.html">Math</a>
+        <a href="regex.html">Regex</a>
+  <a href="encoding.html">Encoding</a>
+    <a href="hash.html">Hashing</a>
+        <a href="json.html">JSON</a>
+        <a href="dates-times.html">Dates & Times</a>
+        <a href="io.html">I/O</a>
+  <a href="system.html">System</a>
+        <a href="file-io.html">File I/O</a>
+        <a href="defer.html">defer</a>
+        <a href="sleep.html">sleep</a>
+        <a href="imports.html">Imports</a>
+        <a href="packages.html">Packages</a>
+        <a href="async.html">Async</a>
+        <a href="jsdoc.html">JSDoc</a>
+        <a href="networking.html">Networking</a>
+        <a href="advanced-networking.html">Advanced Networking</a>
+        <a href="process.html">Processes</a>
+        <a href="database.html">Database</a>
+        <a href="vibe-d.html">Vibe.d</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <section class="panel">
+        <h1>Reference</h1>
+        <p class="muted">This documentation describes Duende's syntax and features with short examples. It is organized by topic; each page links to related features for quick navigation.</p>
+      </section>
+
+      <h2>Topics</h2>
+      <div class="grid">
+        <div class="card">
+          <h3><a href="api-index.html">API Index</a></h3>
+          <p>Alphabetical reference linking to all available functions by topic.</p>
+        </div>
+        <div class="card">
+          <h3><a href="syntax.html">Syntax</a></h3>
+          <p>Comments, literals, blocks, interpolation, and basic operators.</p>
+        </div>
+        <div class="card">
+          <h3><a href="types.html">Types</a></h3>
+          <p>Built-in types, type annotations, and inference with <code>auto</code>.</p>
+        </div>
+        <div class="card">
+          <h3><a href="variables.html">Variables</a></h3>
+          <p><code>let</code> vs <code>var</code>, immutability rules, reassignment.</p>
+        </div>
+        <div class="card">
+          <h3><a href="control-flow.html">Control Flow</a></h3>
+          <p><code>if / elif / else</code>, <code>while</code>, and <code>for-in</code> ranges.</p>
+        </div>
+        <div class="card">
+          <h3><a href="functions.html">Functions</a></h3>
+          <p>Declaration, parameters, return values, and calling conventions.</p>
+        </div>
+        <div class="card">
+          <h3><a href="lambdas.html">Lambdas</a></h3>
+          <p>Inline functions, captures, and usage patterns.</p>
+        </div>
+        <div class="card">
+          <h3><a href="collections.html">Collections</a></h3>
+          <p>Lists and dictionaries with common operations and fields.</p>
+        </div>
+        <div class="card">
+          <h3><a href="strings.html">Strings</a></h3>
+          <p>Interpolation, formatting, search/manipulation methods.</p>
+        </div>
+        <div class="card">
+          <h3><a href="bytes.html">Bytes</a></h3>
+          <p>Byte arrays, indexing, length, and I/O with bytes.</p>
+        </div>
+        <div class="card">
+          <h3><a href="structs-frames.html">Structs & Frames</a></h3>
+          <p>User-defined types: immutable structs and mutable frames.</p>
+        </div>
+        <div class="card">
+          <h3><a href="enums.html">Enums</a></h3>
+          <p>Enumeration declarations and comparisons.</p>
+        </div>
+        <div class="card">
+          <h3><a href="protocols.html">Protocols</a></h3>
+          <p>Interfaces with default methods and the <code>@Implements</code> annotation.</p>
+        </div>
+        <div class="card">
+          <h3><a href="pattern-matching.html">Pattern Matching</a></h3>
+          <p>Match expressions, guards, regex and collection patterns.</p>
+        </div>
+        <div class="card">
+          <h3><a href="result-maybe.html">Result & Maybe</a></h3>
+          <p>Working with <code>Ok</code>/<code>Error</code> and <code>Some</code>/<code>None</code>, and <code>? else</code>.</p>
+        </div>
+        <div class="card">
+          <h3><a href="math.html">Math</a></h3>
+          <p>Math helpers, trigonometry (rad/deg), rounding and formatting. See also <a href="imports.html">Imports</a> for the <code>std.math</code> module.</p>
+        </div>
+        <div class="card">
+          <h3><a href="regex.html">Regex</a></h3>
+          <p>Regex construction, testing, matching, and replacement.</p>
+        </div>
+        <div class="card">
+          <h3><a href="encoding.html">Encoding</a></h3>
+          <p>UTF-8/16, Base64, Hex helpers in <code>std.encoding</code>.</p>
+        </div>
+        <div class="card">
+          <h3><a href="hash.html">Hashing</a></h3>
+          <p>MD5, CRC32/64, SHA-1/2 family, and MurmurHash3 in <code>std.hash</code>.</p>
+        </div>
+        <div class="card">
+          <h3><a href="json.html">JSON</a></h3>
+          <p>JSON parsing, generation, and manipulation using the std.json package.</p>
+        </div>
+        <div class="card">
+          <h3><a href="xml.html">XML</a></h3>
+          <p>Parse, query, modify, and generate XML using the std.xml package.</p>
+        </div>
+        <div class="card">
+          <h3><a href="networking.html">Networking</a></h3>
+          <p>Network communication, HTTP requests, and socket operations.</p>
+        </div>
+        <div class="card">
+          <h3><a href="advanced-networking.html">Advanced Networking</a></h3>
+          <p>Advanced network protocols, UDP communication, and server development.</p>
+        </div>
+        <div class="card">
+          <h3><a href="dates-times.html">Dates & Times</a></h3>
+          <p>Current time, formatting, parsing, arithmetic, and time zones.</p>
+        </div>
+        <div class="card">
+          <h3><a href="io.html">I/O</a></h3>
+          <p>Printing and input reading, including prompting behavior.</p>
+        </div>
+        <div class="card">
+          <h3><a href="file-io.html">File I/O</a></h3>
+          <p>Files and directories: read, write, append, metadata, listing.</p>
+        </div>
+        <div class="card">
+          <h3><a href="defer.html">defer</a></h3>
+          <p>Deferring function calls until scope exit.</p>
+        </div>
+        <div class="card">
+          <h3><a href="sleep.html">sleep</a></h3>
+          <p>Pausing execution for milliseconds.</p>
+        </div>
+        <div class="card">
+          <h3><a href="async.html">Async</a></h3>
+          <p>Asynchronous programming, async/await patterns, and concurrent operations.</p>
+        </div>
+        <div class="card">
+          <h3><a href="jsdoc.html">JSDoc</a></h3>
+          <p>JSDoc-style block comments with <code>/** ... */</code> (currently ignored by the compiler).</p>
+        </div>
+        <div class="card">
+          <h3><a href="vibe-d.html">Vibe.d</a></h3>
+          <p>Comprehensive web development with HTTP/HTTPS servers, WebSocket support, SSL/TLS, async operations, logging, file system, and process management.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs — offline static pages</div>
+  </footer>
+</body>
+</html>

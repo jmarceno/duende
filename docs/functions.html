@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Functions — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Functions</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="lambdas.html">Lambdas</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Declaration</h2>
+      <p>Functions declare parameter and return types. Bodies use <code>do ... end</code>.</p>
+      <pre><code>int add(int a, int b) do
+    return a + b
+end
+
+void greet(string: name) do
+    print("Hello, ${name}")
+end
+</code></pre>
+
+  <h2>Auto parameter types</h2>
+  <p>Parameters can use <code>auto</code> to defer the type and let it be inferred at each call site. This is useful for generic helpers and when working with provider-backed types like database connections.</p>
+  <pre><code>void println(auto x) do
+  print("${x}")
+end
+
+// Works with any type
+println(42)
+println("hi")
+</code></pre>
+  <p>Under the hood, Duende emits D templates for functions with <code>auto</code> parameters, so you can pass values of any type without specifying the exact type.</p>
+
+    <h2>Default parameters</h2>
+    <p>Parameters can have default values using <code>=</code>. Default parameters must come after all non-default parameters. Defaults must be compile-time constant expressions (literals, arithmetic on literals, simple casts) and must be type-compatible.</p>
+    <pre><code>int multiply(int a, int b = 2) do
+  return a * b
+end
+
+int add3(int a, int b = 10, int c = 5) do
+  return a + b + c
+end
+
+void logMessage(string: msg, string: level = "INFO") do
+  print("${level}: ${msg}")
+end
+
+// Calls
+print(multiply(7))      // 14
+print(add3(5))          // 20
+logMessage("Ready")     // INFO: Ready
+</code></pre>
+
+      <h2>Named arguments</h2>
+      <p>You can call functions using named arguments with <code>name: value</code>. Named arguments may appear in any order and can be mixed with positional ones. Unspecified parameters use their default values when available.</p>
+      <pre><code>int add3(int a, int b = 10, int c = 5) do
+  return a + b + c
+end
+
+// Reorder freely using names
+print(add3(c: 3, a: 1, b: 2))      // 6
+
+// Omit params that have defaults
+print(add3(c: 5, a: 1))            // 1 + 10 + 5 = 16
+
+void greet(string: name) do
+  print("Hello, ${name}")
+end
+
+greet(name: "World")
+
+// Mixing positional and named is allowed; positionals fill first unfilled parameters
+print(add3(1, c: 7))               // 1 + 10 + 7 = 18
+</code></pre>
+
+      <h2>Calling</h2>
+      <pre><code>let int s = add(7, 8)
+greet("Duende")
+</code></pre>
+
+      <h2>Return</h2>
+      <p>Use <code>return</code> with a value of the declared type. For <code>void</code> functions, <code>return</code> can omit a value.</p>
+
+      <div class="see-also">
+        See also: <a href="lambdas.html">Lambdas</a>, <a href="result-maybe.html">Result & Maybe</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

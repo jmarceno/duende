@@ -1,0 +1,27 @@
+{
+    "comments": {
+        "lineComment": "//"
+    },
+    "brackets": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"]
+    ],
+    "autoClosingPairs": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"],
+        ["\"", "\""]
+    ],
+    "surroundingPairs": [
+        ["{", "}"],
+        ["[", "]"],
+        ["(", ")"],
+        ["\"", "\""]
+    ],
+    "indentationRules": {
+        "increaseIndentPattern": "\\b(do|struct|enum|frame|protocol)\\b.*$",
+        "decreaseIndentPattern": "^\\s*\\bend\\b.*$"
+    },
+    "wordPattern": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+}

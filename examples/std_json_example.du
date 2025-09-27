@@ -1,0 +1,11 @@
+import std.json
+
+let string text = "{\"language\":\"D\",\"list\":[\"a\",\"b\",\"c\",\"D\"],\"rating\":3.5}"
+
+// Parse JSON object and validate multiple fields
+var auto j = parseJSON(text)
+print(j["language"].str)
+print(j["list"].array.length)
+print(j["list"][0].str)
+print(j["list"][3].str)
+print(j["rating"].floating)

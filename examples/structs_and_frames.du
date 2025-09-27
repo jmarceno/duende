@@ -1,0 +1,32 @@
+
+// Structs are always immutable
+struct point() do
+    let float x = 0
+    let float y = 0    
+    // Struct fields cannot change, so we return a new point
+    point move(float dx, float dy) do
+        return point(this.x + dx, this.y + dy)
+    end
+end
+
+frame movablePoint() do
+    var float x = 0
+    var float y = 0
+    // Frames are mutable so we can change the values in place
+    void move(float dx, float dy) do
+        this.x = this.x + dx
+        this.y = this.y + dy
+    end
+end
+
+
+int main() do
+    let point p1 = point(0.0, 0.0) // Structs always need to be declared with let, declaring it with var will cause a compilation error
+    var movablePoint p2 = movablePoint(3.0, 4.0) // Frames can be declared with `var` or `let`, but using `let` in this case would cause a runtime error when trying to call `move`.
+
+    let point movedPoint = p1.move(2,3)
+    print("New Moved Point ->  x: ${p1.x} / y:{p1.y}")
+
+    p2.move(1.0, 1.0)
+    print("Moved point: ${p2.x} / ${p2.y}")
+end

@@ -1,0 +1,42 @@
+int add(int a, int b) do
+    return a + b
+end
+
+void greet(string name) do
+    print("Hello, ${name}")
+end
+
+// Default arguments examples
+int multiply(int a, int b = 2) do
+    return a * b
+end
+
+int add3(int a, int b = 10, int c = 5) do
+    return a + b + c
+end
+
+int inc(int x, int by = 2 + 3) do
+    return x + by
+end
+
+void logMessage(string msg, string level = "INFO") do
+    print("${level}: ${msg}")
+end
+
+int main() do
+    let int s = add(7, 8)
+    print(s)
+    greet("Duende")
+    // Using defaults
+    print(multiply(7))        // 7*2
+    print(add3(5))            // 5+10+5
+    print(add3(5, 1))         // 5+1+5
+    print(inc(4))             // 4+5
+    logMessage("Ready")
+    logMessage("Oops", "ERROR")
+    // Named arguments usage
+    print(add3(a: 1, b: 2, c: 3))    // 6
+    print(add3(c: 5, a: 1))          // 1+10+5 = 16 (b default 10)
+    greet(name: "World")
+    logMessage(level: "DEBUG", msg: "Trace")
+end

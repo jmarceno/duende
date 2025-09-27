@@ -1,0 +1,11 @@
+name = "duende-arsd-terminal"
+version = "0.1.0"
+
+[modules.terminal]
+imports = ["arsd.terminal"]
+aliases = { }
+helpers = []
+reexports = []
+
+[dub]
+dependencies = { "arsd-official:terminal" = "==12.0.0" }

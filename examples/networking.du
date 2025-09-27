@@ -1,0 +1,26 @@
+import std.networking
+
+// Simple echo server & client using std.networking package helpers.
+// The server uses a helper to accept once in a background D thread.
+
+int main() do
+  var int port = 9099
+
+  // Start listening and spawn one-shot echo handler in background
+  var auto listener = tcpListen(port)
+  spawnEchoOnce(listener)
+
+  // Give the thread a moment to start accepting
+  sleep(10)
+
+  // Client connect, send, receive
+  var auto c = tcpConnect("127.0.0.1", port)
+  tcpSend(c, "hello", true)
+  var string reply = tcpRecvLine(c)
+  print(reply)
+  tcpClose(c)
+
+  // Close listener after single accept handled
+  tcpClose(listener)
+  return 0
+end

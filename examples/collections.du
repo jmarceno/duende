@@ -1,0 +1,19 @@
+int main() do
+    var list<int> numbers = [1, 2, 3, 4, 5]
+    numbers.add(6)
+
+    let int first = numbers[0]
+    print("First: ${first}")
+
+    var dict config = {"host": "localhost", "port": 8080}
+    if config.has("port") do
+        let int port = config["port"] //We validated that this exist, but if it did not, it should just crash for now, we will handle errors later
+        print("Port: ${port}")
+    else
+        print("No port specified at config")
+
+        for entry in config.items() do
+            print("${entry.key}: ${entry.value}")
+        end
+    end
+end

@@ -1,0 +1,7 @@
+int foo() do
+    return 1
+end
+
+int bar() do
+    return 2
+end

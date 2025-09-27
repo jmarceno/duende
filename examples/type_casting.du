@@ -1,0 +1,60 @@
+// Demonstrates explicit type casting and modulo in a realistic mini-report
+
+int main() do
+    // Simulate reading mixed data as strings (e.g., CSV fields), then cast
+    let list<string> raw = ["42", "3.14", "-7", "NaN", "256"]
+
+    // Safe-ish parsing using Result/Maybe helpers is possible, but here we demonstrate casts directly
+    // Note: string(x) converts any value to string; int(x)/float(x) use numeric conversion semantics.
+    let string a = string(123)           // "123"
+    let int b = int(3.99)               // 3
+    let float c = float("2.5")          // 2.5
+
+    print(a)
+    print(b)
+    print(c)
+
+    // Summarize: take numeric-looking strings, cast to int where applicable, sum only evens using modulo
+    var int sum = 0
+    for i in 0..raw.length() - 1 do
+        let string s = raw[i]
+        // Try cast to float first; on failure this would throw; for demo, assume good entries ("NaN" turns into float NaN)
+        let float f = float(s)
+        // Cast to int by truncation; modulo to check even
+        let int n = int(f)
+        if n % 2 == 0 do
+            sum = sum + n
+        end
+    end
+    print(sum)
+
+    // Conversions across types
+    let int n1 = 255
+    let string hexLike = string(n1)   // "255"
+    let float precise = float(n1)     // 255.0
+    print(hexLike)
+    print(precise)
+
+    // Strict conversions via safeCast: returns Result<T>
+    let Result<int> xi = safeCast(int, "10")
+    let Result<string> xs = safeCast(string, 123)
+    let Result<int> badInt = safeCast(int, "NaN")
+    let Result<int> failInt = safeCast(int, "abc")
+
+    // Show Ok/Error using pattern match and unwrap
+    match xi do
+        Ok(v) -> print(v)
+        Error(e) -> print(e)
+    end
+    match xs do
+        Ok(v) -> print(v)
+        Error(e) -> print(e)
+    end
+    // badInt: expect Error("NaN") -> fallback -1
+    let int bi = badInt ? else -1
+    print(bi)
+    // failInt: expect parse error -> fallback -2
+    let int fi = failInt ? else -2
+    print(fi)
+
+end

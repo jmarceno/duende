@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Types — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Types</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="syntax.html">Syntax</a>
+        <a href="variables.html">Variables</a>
+        <a href="collections.html">Collections</a>
+        <a href="strings.html">Strings</a>
+        <a href="result-maybe.html">Result & Maybe</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Built-in types</h2>
+      <ul>
+        <li><code>int</code> — 64-bit integer</li>
+        <li><code>float</code> — double-precision</li>
+        <li><code>string</code></li>
+        <li><code>bool</code></li>
+        <li><code>bytes</code> — byte array</li>
+  <li><code>list&lt;T&gt;</code> — dynamic array (must specify element type)</li>
+        <li><code>dict</code> — associative array</li>
+        <li><code>auto</code> — inferred type of the initializer</li>
+        <li>User-defined: <a href="structs-frames.html">struct</a>, <a href="structs-frames.html">frame</a>, <a href="enums.html">enum</a>, and <a href="protocols.html">protocol</a></li>
+      </ul>
+
+      <h2>Type annotations</h2>
+  <pre><code>let int a = 1
+let float b = 3.5
+let string s = "text"
+let list&lt;int&gt; xs = [1, 2, 3]
+let dict d = {"k": 1}
+let auto n = 42 // inferred as int
+</code></pre>
+
+  <h2>Generics-like containers</h2>
+  <p>Containers use explicit element types, e.g., <code>list&lt;int&gt;</code>, <code>list&lt;string&gt;</code>. Empty list literals require context: <code>let list&lt;string&gt; xs = []</code>. Algebraic results use constructor names (see <a href="result-maybe.html">Result & Maybe</a>).</p>
+
+      <h2>Result and Maybe</h2>
+      <p>These are sum types with constructors <code>Ok</code>/<code>Error</code> and <code>Some</code>/<code>None</code>. Use the <code>? else</code> operator to provide a fallback. See the dedicated page: <a href="result-maybe.html">Result & Maybe</a>.</p>
+
+  <h2>Type casting</h2>
+  <p>Use function-like syntax to convert between core types:</p>
+  <pre><code>let int a = int(3.99)      // 3
+let float b = float("2.5") // 2.5
+let string s = string(42)  // "42"
+// Works with variables and expressions too:
+let int n = int("10") + int(2.7) // 12
+</code></pre>
+  <p>Casting relies on conversion semantics similar to D's <code>std.conv.to</code>. Converting malformed strings to numbers may raise a runtime error.</p>
+
+      <div class="see-also">
+        See also: <a href="variables.html">Variables</a>, <a href="collections.html">Collections</a>, <a href="pattern-matching.html">Pattern Matching</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

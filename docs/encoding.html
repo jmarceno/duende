@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Encoding — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Encoding</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="strings.html">Strings</a>
+        <a href="bytes.html">Bytes</a>
+        <a href="imports.html">Imports</a>
+        <a href="packages.html">Packages</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">The <code>std.encoding</code> package offers friendly helpers for common encodings built on top of D's standard library: UTF-8/UTF-16, Base64, and Hex. It is provided via Duende's package system and requires no compiler changes.</p>
+
+      <h2>Import</h2>
+<pre><code>import std.encoding</code></pre>
+
+      <h2>Available functions</h2>
+      <ul>
+        <li><code>utf8Encode(s: string) -&gt; bytes</code></li>
+        <li><code>utf8Decode(b: bytes) -&gt; string</code></li>
+        <li><code>utf16LEEncode(s: string) -&gt; bytes</code></li>
+        <li><code>utf16LEDecode(b: bytes) -&gt; string</code></li>
+        <li><code>utf16BEEncode(s: string) -&gt; bytes</code></li>
+        <li><code>utf16BEDecode(b: bytes) -&gt; string</code></li>
+        <li><code>base64Encode(b: bytes) -&gt; string</code></li>
+        <li><code>base64Decode(s: string) -&gt; bytes</code></li>
+        <li><code>hexEncode(b: bytes) -&gt; string</code></li>
+        <li><code>hexDecode(s: string) -&gt; bytes</code></li>
+        <li><code>convertToString(encoding: string, data: bytes) -&gt; string</code></li>
+        <li><code>convertToBytes(encoding: string, s: string) -&gt; bytes</code></li>
+      </ul>
+
+      <h2>API</h2>
+      <ul>
+        <li>UTF-8: <code>utf8Encode(string) -&gt; bytes</code>, <code>utf8Decode(bytes) -&gt; string</code></li>
+        <li>UTF-16 LE/BE: <code>utf16LEEncode/utf16LEDecode</code>, <code>utf16BEEncode/utf16BEDecode</code></li>
+        <li>Base64: <code>base64Encode(bytes|utf8) -&gt; string</code>, <code>base64Decode(string) -&gt; bytes</code></li>
+        <li>Hex: <code>hexEncode(bytes) -&gt; string</code>, <code>hexDecode(string) -&gt; bytes</code></li>
+        <li>Generic conversions: <code>convertToString(encoding, bytes)</code>, <code>convertToBytes(encoding, string)</code> where <em>encoding</em> can be <code>utf-8</code>, <code>utf-16le</code>, <code>utf-16be</code>, <code>base64</code>, or <code>hex</code>.</li>
+      </ul>
+
+      <h2>Example</h2>
+<pre><code>import std.encoding
+
+let string text = "Hello, 世界"
+let bytes b8 = utf8Encode(text)
+print(len(b8))
+print(utf16LEDecode(utf16LEEncode(text)))
+print(base64Encode(b8))
+print(hexEncode(b8))</code></pre>
+
+      <p>See <code>examples/std_encoding.du</code> for a more complete scenario with round-trips and conversions.</p>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

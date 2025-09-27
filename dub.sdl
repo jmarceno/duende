@@ -1,0 +1,11 @@
+name "duende"
+description "Duende language compiler"
+authors "jmarceno"
+copyright "Copyright © 2025, Jardel Marceno"
+license "Apache-2.0"
+dependency "arsd-official:terminal" version="==12.0.0"
+
+// Embed duende_packages manifests into the binary for built-in providers
+// The stringImportPaths allow import("path") to pull file contents at compile time.
+stringImportPaths "duende_packages"
+ 

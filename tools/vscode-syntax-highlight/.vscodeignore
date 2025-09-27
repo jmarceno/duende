@@ -1,0 +1,15 @@
+**/*.ts
+**/tsconfig.json
+**/.eslintrc.json
+**/.gitattributes
+**/.gitignore
+**/.github/**
+**/.vscode/**
+**/.vscode-test/**
+**/coverage/**
+**/node_modules/**
+**/out/**
+**/test/**
+**/.DS_Store
+**/desktop.ini
+**/Thumbs.db

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Regex — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Regex</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="strings.html">Strings</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Available methods</h2>
+      <ul>
+        <li>On regex
+          <ul>
+            <li><code>test(s: string) -&gt; bool</code></li>
+            <li><code>matchFirst(s: string) -&gt; Match</code></li>
+            <li><code>matchAll(s: string) -&gt; list&lt;Match&gt;</code></li>
+            <li><code>replace(s: string, repl: string) -&gt; string</code> (same as <code>replaceAll</code>)</li>
+          </ul>
+        </li>
+        <li>On string
+          <ul>
+            <li><code>matches(r: regex) -&gt; bool</code></li>
+            <li><code>matchFirst(r: regex) -&gt; Match</code></li>
+            <li><code>matchAll(r: regex) -&gt; list&lt;Match&gt;</code></li>
+            <li><code>replace(r: regex, repl: string) -&gt; string</code></li>
+          </ul>
+        </li>
+        <li>Match object properties
+          <ul>
+            <li><code>.hit</code> (string) · <code>.empty</code> (bool)</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h2>Construction</h2>
+      <p>Use <code>regex("...")</code>. If the pattern is a string literal, it is validated at compile time.</p>
+      <pre><code>let auto reg = regex("(\\w+)")
+</code></pre>
+
+      <h2>Testing and matching</h2>
+      <pre><code>if reg.test("hello") do
+    print("Match found!")
+end
+
+let auto match_first = reg.matchFirst("hello world")
+print(match_first.hit)
+print(match_first.empty)
+
+let auto matches = reg.matchAll("Hello, duende 123!")
+print(matches.length)
+let auto first_res = matches[0]
+print(first_res.hit)
+</code></pre>
+
+      <h2>Replacement</h2>
+      <pre><code>let string replaced = reg.replace("hello world", "WORD")
+print(replaced) // "WORD world"
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="strings.html">Strings</a>, <a href="pattern-matching.html">Pattern Matching</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

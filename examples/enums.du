@@ -1,0 +1,22 @@
+enum Status do
+    ACTIVE, // Duende uses comma here to allow for single line declaration like -> `enum Status do ACTIVE, INACTIVE, PENDING end`
+    INACTIVE,
+    PENDING
+end
+
+void processStatus(Status status) do
+    if status == Status.ACTIVE do
+        print("Processing active item")
+    else
+        if status == Status.INACTIVE do
+            print("Item is inactive")
+        else
+            print("Item is pending")
+        end
+    end
+end
+
+int main() do
+    let Status current = Status.ACTIVE
+    processStatus(current)
+end

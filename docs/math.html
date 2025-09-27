@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Math — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Math</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="strings.html">Strings</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">
+        Extended math helpers live in the standard library module <code>std.math</code>.
+        You must import it to use any math functions.
+      </p>
+      <h2>Available functions</h2>
+      <ul>
+        <li>Core: <code>abs(x)</code>, <code>min(a,b)</code>, <code>max(a,b)</code>, <code>floor(x)</code>, <code>ceil(x)</code>, <code>round(x)</code>, <code>sqrt(x)</code>, <code>pow(a,b)</code>, <code>log(x)</code>, <code>exp(x)</code></li>
+        <li>Trig: <code>sin(x)</code>, <code>cos(x)</code>, <code>tan(x)</code> (radians)</li>
+        <li>Degrees helpers: <code>sinDeg(x)</code>, <code>cosDeg(x)</code>, <code>tanDeg(x)</code>, <code>toRadians(deg)</code>, <code>toDegrees(rad)</code></li>
+        <li>Formatting: <code>roundTo(x: float, n: int)</code>, <code>formatFloat(x: float, n: int)</code></li>
+      </ul>
+      <pre><code>import std.math
+
+print(roundTo(3.1415926, 2))    // 3.14
+print(sinDeg(90))               // 1
+</code></pre>
+
+      <h2>Core functions</h2>
+      <pre><code>abs(x)
+min(a, b)
+max(a, b)
+floor(x)
+ceil(x)
+round(x)
+sqrt(x)
+pow(a, b)
+log(x)
+exp(x)
+</code></pre>
+
+      <h2>Trigonometry</h2>
+      <pre><code>sin(x) cos(x) tan(x)          // radians
+sinDeg(x) cosDeg(x) tanDeg(x) // degrees
+toRadians(deg) toDegrees(rad)
+</code></pre>
+
+      <h2>Formatting helpers</h2>
+      <pre><code>roundTo(3.1415926, 2)     // 3.14
+formatFloat(3.1415926, 4) // 3.1416
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="strings.html">Strings</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

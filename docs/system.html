@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>System — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>System</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="io.html">I/O</a>
+        <a href="process.html">Processes</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <section class="panel">
+        <h2>Built-ins</h2>
+        <p>These helpers are available everywhere without imports:</p>
+        <ul>
+          <li><code>osName()</code> → <code>string</code>: a lowercase OS identifier (e.g., <code>linux</code>, <code>macos</code>, <code>windows</code>).</li>
+          <li><code>osVersion()</code> → <code>string</code>: a human-friendly OS/kernel version string.</li>
+          <li><code>cpuArch()</code> → <code>string</code>: CPU architecture (e.g., <code>x86_64</code>, <code>aarch64</code>).</li>
+          <li><code>args()</code> → <code>list&lt;string&gt;</code>: command-line arguments passed to the program (excluding the program name).</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>Also available</h3>
+        <ul>
+          <li><code>sleep(ms: int)</code> — pause execution for milliseconds.</li>
+          <li><code>len(x)</code> — length of strings, lists, dicts, bytes.</li>
+          <li><code>safeCast(T, value)</code> — strict conversions returning <code>Result&lt;T&gt;</code>.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h3>Example</h3>
+<pre><code>// Print environment info
+print("OS: ${osName()} - ${osVersion()}")
+print("CPU: ${cpuArch()}")
+
+// CLI usage
+let list&lt;string&gt; av = args()
+if av.length == 0 do
+    print("Usage: tool &lt;name&gt; &lt;n1&gt; &lt;n2&gt; ...")
+else
+    let string name = av[0]
+    print("Hello ${name}")
+    var int total = 0
+    for i in 1 .. av.length - 1 do
+        let string s = av[i]
+        if s.matches(regex("^[-]?\\d+$")) do
+            total = total + s.toInt()
+        end
+    end
+    print("Sum=${total}")
+end</code></pre>
+        <p>Note: OS name/version and CPU arch vary per system; tests should not assert exact values.</p>
+      </section>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs — offline static pages</div>
+  </footer>
+</body>
+</html>

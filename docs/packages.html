@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Packages — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+  <style>
+    code.k { color: #a31515; font-weight: 600; }
+    pre { white-space: pre-wrap; }
+  </style>
+  </head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Packages</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="imports.html">Imports</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <p class="muted">Duende can import modules that are provided by external D libraries (or internal helpers) without modifying the compiler for each module. This page explains how to add such modules via data-driven manifests and where Duende looks for them.</p>
+
+      <h2>Overview</h2>
+      <ul>
+        <li>Packages are folders containing a <code>duende-package.toml</code> manifest.</li>
+        <li>Manifests declare one or more Duende module names and how they map to D: required D imports, symbol aliases, optional helper .d files, and optional dub dependencies.</li>
+        <li>When your Duende module imports a name not found in your project, the compiler consults these manifests to satisfy it.</li>
+      </ul>
+
+      <h2>Discovery location</h2>
+      <p>Duende only looks for packages in one place:</p>
+      <ol>
+        <li><code>duende_packages/</code> next to the <code>duende</code> executable.</li>
+      </ol>
+      <p>Each direct child directory is probed for a <code>duende-package.toml</code> manifest. This keeps distribution self-contained and avoids relying on user/system environment.</p>
+
+      <h2>Manifest format</h2>
+      <p>The manifest is a minimal TOML-like file parsed by the compiler. Supported fields:</p>
+      <pre><code>name = "duende-std-csv"
+version = "0.1.0"
+
+[modules.std.csv]
+imports = ["std.csv"]
+aliases = { }
+helpers = []
+
+# Optional: dub dependencies (resolved only when providers are used)
+[dub]
+dependencies = { "toml-d" = "~>0.4.0" }
+</code></pre>
+      <ul>
+        <li><code>modules.&lt;duende.module.name&gt;</code> declares one provided module.</li>
+        <li><code>imports</code>: array of D modules to import in generated code.</li>
+        <li><code>aliases</code>: inline table mapping friendly names to <code>module.symbol</code> (e.g., <code>{ println = "std.stdio.writeln" }</code>).</li>
+        <li><code>helpers</code>: array of additional D source files to compile alongside generated code.</li>
+        <li><code>[dub].dependencies</code> (optional): name→version map to include when building via dub.</li>
+      </ul>
+
+      <h2>Using a package</h2>
+      <ol>
+        <li>Place a package directory (with <code>duende-package.toml</code>) under one of the discovery roots.</li>
+        <li>Import the declared module name in your Duende code, e.g. <code>import std.csv</code>.</li>
+        <li>Compile normally. If any used provider declares dub deps, Duende will synthesize a temporary dub project and build with <code>dub</code>. Otherwise, it compiles directly with <code>dmd</code>.</li>
+      </ol>
+
+      <h2>Example: std.csv</h2>
+      <p>This repo includes a minimal provider for D's <code>std.csv</code> bundled with the compiler:</p>
+      <pre><code>examples/
+  std_csv_example.du
+duende_packages/
+  stdcsv/
+    duende-package.toml  # provides modules.std.csv = { imports = ["std.csv"] }
+</code></pre>
+      <p>And the Duende code:</p>
+      <pre><code>import std.csv
+
+let string text = "name,age\nAlice,30\nBob,25\n"
+var int count = 0
+for rec in csvReader(text) do
+  if count == 1 do
+    var int i = 0
+    for field in rec do
+      if i &lt; 2 do
+        print(field)
+      end
+      i = i + 1
+    end
+  end
+  count = count + 1
+end
+</code></pre>
+  <p>Run with:</p>
+  <pre><code>$ ./duende examples/std_csv_example.du -r
+Alice
+30</code></pre>
+
+      <h2>Example: std.encoding</h2>
+      <p>The repo bundles a provider for encoding helpers:</p>
+      <pre><code>duende_packages/
+  stdencoding/
+    duende-package.toml   # provides modules.std.encoding with helpers
+    duende_encoding.d     # implementation</code></pre>
+      <p>Usage:</p>
+      <pre><code>import std.encoding
+let string s = "Hello"
+let string b64 = base64Encode(utf8Encode(s))
+print(b64)</code></pre>
+
+      <h2>Example: vibe_d</h2>
+      <p>The repo includes a comprehensive vibe.d integration provider:</p>
+      <pre><code>duende_packages/
+  vibed/
+    duende-package.toml   # provides modules.vibe_d with full web framework
+    duende_vibed.d        # wrapper implementation</code></pre>
+      <p>The vibe_d package provides complete web development capabilities including:</p>
+      <ul>
+        <li>HTTP/HTTPS server and client</li>
+        <li>WebSocket server and client</li>
+        <li>SSL/TLS context management</li>
+        <li>Async operations and timers</li>
+        <li>Database access and connection pooling</li>
+        <li>Logging system</li>
+        <li>File system operations</li>
+        <li>Process management</li>
+      </ul>
+      <p>Usage example:</p>
+      <pre><code>import vibe_d
+
+// Start HTTP server
+let string serverId = startServer(8080, false)
+
+// Create HTTP client
+let string clientId = createHttpClient()
+let string response = httpGet(clientId, "http://example.com/api")
+
+// WebSocket server
+let string wsId = createWebSocketServer(9001, "/ws")
+
+// Async file operations
+let bool success = writeFileAsync("data.txt", "Hello World")
+let string content = readFileAsync("data.txt")
+
+// Logging
+let string logger = createLogger("MyApp", 2)
+logInfo("Application started")
+
+// Timers
+let string timerId = createTimer(1000, true)
+</code></pre>
+
+      <h2>Aliases and helpers</h2>
+      <p>Aliases provide ergonomic names for D symbols. For example:</p>
+      <pre><code>aliases = { println = "std.stdio.writeln" }</code></pre>
+      <p>Then in Duende:</p>
+      <pre><code>import mylib.util
+println("hello")</code></pre>
+      <p>Helpers are paths to additional D source files shipped with the provider; they are compiled together with generated code.</p>
+
+      <h2>Edge cases and tips</h2>
+      <ul>
+        <li><strong>std.* imports</strong>: If you import <code>std.*</code> without a provider, Duende will not error and may handle some features internally (e.g., <code>std.math</code> helpers). To map arbitrary <code>std.*</code> imports to D, add providers.</li>
+  <li><strong>Provider precedence</strong>: If multiple packages declare the same Duende module inside <code>duende_packages/</code>, the first directory entry discovered wins.</li>
+        <li><strong>Dub dependencies</strong>: If any used provider declares dub deps, Duende switches to a temporary dub build. This requires network access for missing packages and the <code>dub</code> tool installed.</li>
+        <li><strong>Helpers paths</strong>: Relative paths are resolved relative to the manifest directory; absolute paths are respected.</li>
+        <li><strong>Selective imports</strong>: You can still use selective or wildcard imports on your own project modules. Provider-backed modules don’t generate a D import for the Duende module name, only the declared D imports and aliases.</li>
+      </ul>
+
+      <h2>Checklist for adding a new package</h2>
+      <ol>
+        <li>Create a folder under one discovery root.</li>
+        <li>Add <code>duende-package.toml</code> with <code>name</code>, <code>version</code>, and one or more <code>[modules.&lt;name&gt;]</code> entries.</li>
+        <li>Fill <code>imports</code>, <code>aliases</code>, and optional <code>helpers</code>. Add <code>[dub].dependencies</code> only if needed.</li>
+        <li>Compile a small example; set <code>DUENDE_PATH</code> to your provider root if it’s not under your project.</li>
+      </ol>
+
+  <div class="see-also">See also: <a href="imports.html">Imports</a> · <a href="networking.html">Networking</a> · <a href="database.html">Database</a></div>
+      
+      <h2>Bundled providers</h2>
+      <ul>
+        <li><code>std.csv</code> — thin mapping to D's <code>std.csv</code>.</li>
+        <li><code>std.encoding</code> — UTF-8/16, Base64, Hex helpers.</li>
+        <li><code>std.xml</code> — XML parsing/writing via <code>dxml</code>.</li>
+        <li><code>std.net</code>, <code>std.process</code>, <code>std.db</code> — see respective docs.</li>
+        <li><code>std.hash</code> / <code>std.digest</code> — hashing & checksums (MD5, CRC32/64, SHA-1/2, MurmurHash3). See <a href="hash.html">Hashing</a>.</li>
+        <li><code>vibe_d</code> — complete web framework integration providing HTTP server/client, WebSockets, async operations, SSL/TLS, database access, logging, timers, filesystem, and process management via vibe.d.</li>
+      </ul>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

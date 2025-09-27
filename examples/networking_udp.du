@@ -1,0 +1,24 @@
+import std.networking
+
+// UDP echo demo using std.networking helpers with timeouts.
+// Spawns a one-shot UDP echo server and sends a datagram from a client.
+
+int main() do
+  // Server binds to an ephemeral port and starts echoing once in background
+  var auto server = udpOpen(0)
+  var int port = udpLocalPort(server)
+  spawnUdpEchoOnce(server)
+
+  // Client sends to server and waits with timeout
+  var auto client = udpOpen(0)
+  udpSendTo(client, "127.0.0.1", port, "ping")
+  var string msg = udpRecv(client, 1000)
+  if msg == "" do
+    print("timeout")
+  else
+    print(msg)
+  end
+  udpClose(client)
+  udpClose(server)
+  return 0
+end

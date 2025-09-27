@@ -1,0 +1,10 @@
+// Read a name and greet the user
+let string name = input()
+print("Hello, ${name}")
+
+// Use input() inside an expression
+print("Length=${(input()).length}")
+
+// Prompt version: print prompt (no newline) and read another line
+let string prompted = input("Name: ")
+print("Prompted: ${prompted}")

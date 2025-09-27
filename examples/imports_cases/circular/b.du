@@ -1,0 +1,3 @@
+import imports_cases.circular.a
+
+int fb() do return 2 end

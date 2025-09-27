@@ -1,0 +1,38 @@
+name = "duende-std-encoding"
+version = "0.1.0"
+
+description = "Encoding helpers for Duende: UTF-8/UTF-16, Base64, Hex with a friendly API"
+
+[modules.std.encoding]
+imports = [
+  "std.base64",
+  "std.utf",
+  "std.string",
+  "std.array",
+  "duende_packages.stdencoding.duende_encoding"
+]
+helpers = ["duende_encoding.d"]
+aliases = {
+  # UTF-8
+  utf8Encode = "duende_packages.stdencoding.duende_encoding.utf8Encode",
+  utf8Decode = "duende_packages.stdencoding.duende_encoding.utf8Decode",
+
+  # UTF-16 (LE/BE)
+  utf16LEEncode = "duende_packages.stdencoding.duende_encoding.utf16LEEncode",
+  utf16LEDecode = "duende_packages.stdencoding.duende_encoding.utf16LEDecode",
+  utf16BEEncode = "duende_packages.stdencoding.duende_encoding.utf16BEEncode",
+  utf16BEDecode = "duende_packages.stdencoding.duende_encoding.utf16BEDecode",
+
+  # Base64
+  base64Encode = "duende_packages.stdencoding.duende_encoding.base64Encode",
+  base64Decode = "duende_packages.stdencoding.duende_encoding.base64Decode",
+
+  # Hex
+  hexEncode = "duende_packages.stdencoding.duende_encoding.hexEncode",
+  hexDecode = "duende_packages.stdencoding.duende_encoding.hexDecode",
+
+  # Conversions
+  convertToString = "duende_packages.stdencoding.duende_encoding.convertToString",
+  convertToBytes = "duende_packages.stdencoding.duende_encoding.convertToBytes"
+}
+reexports = []

@@ -1,0 +1,41 @@
+protocol Greeter do
+  string greet(string name)
+
+  int testFunc()
+
+  string defaultGreet(string name) do
+    return "Hello ${name}"
+  end
+
+end
+
+@Implements(Greeter)
+frame ConsoleGreeter do
+  string greet(string name) do
+    return "Hello, ${name}"
+  end
+
+  int testFunc() do
+    return 0
+  end
+end
+
+@Implements(Greeter)
+struct ConsoleStructGreeter do
+  string greet(string name) do
+    return "Hello, ${name}"
+  end
+
+  int testFunc() do
+    return 0
+  end
+end
+
+int main() do
+  var ConsoleGreeter g = ConsoleGreeter()
+  print(g.greet("World"))
+
+  let ConsoleStructGreeter sg = ConsoleStructGreeter()
+  print(sg.defaultGreet("Foo"))
+  return 0
+end

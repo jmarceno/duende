@@ -1,0 +1,7 @@
+name = "duende-std-json"
+version = "0.1.0"
+
+[modules.std.json]
+imports = ["std.json"]
+aliases = {}
+helpers = []

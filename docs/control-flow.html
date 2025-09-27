@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Control Flow — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Control Flow</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="syntax.html">Syntax</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>If / elif / else</h2>
+      <pre><code>if n <= 1 do
+    return 1
+elif n &gt; 10 do
+    return 42
+else
+    return n * 2
+end
+</code></pre>
+
+      <h2>While</h2>
+      <pre><code>var int count = 1
+while count &lt; 5 do
+    print(count)
+    count = count + 1
+end
+</code></pre>
+
+    <h2>Break and Continue</h2>
+    <p>Use <code>continue</code> to skip to the next iteration and <code>break</code> to exit the loop.</p>
+    <pre><code>var int i = 0
+while true do
+  i = i + 1
+  if i == 3 do
+    continue
+  end
+  print(i)
+  if i == 5 do
+    break
+  end
+end
+</code></pre>
+
+      <h2>For-in ranges</h2>
+      <p>Use the range operator <code>a .. b</code>. Optional step is not shown in examples.</p>
+      <pre><code>for i in 1 .. 5 do
+    print(i)
+end
+</code></pre>
+
+      <h2>Boolean operators</h2>
+      <p><code>!</code>, <code>&&</code>, <code>||</code> are supported (no word forms).</p>
+      <pre><code>let bool a = true
+let bool b = false
+print(!(a && b) && (a || b))
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="functions.html">Functions</a>, <a href="pattern-matching.html">Pattern Matching</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>

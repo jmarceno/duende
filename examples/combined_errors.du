@@ -1,0 +1,16 @@
+void test() do
+    // Missing import error
+    hash("test")
+    
+    // Break outside loop
+    if true do
+        break
+    end
+    
+    // Continue outside loop  
+    continue
+end
+
+int main() do
+    test()
+end

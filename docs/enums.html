@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Enums — Duende</title>
+  <link rel="stylesheet" href="style.css" />
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="../duende-logo.svg" alt="Duende" />
+        <h1>Enums</h1>
+      </div>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="pattern-matching.html">Pattern Matching</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="container">
+      <h2>Declaration</h2>
+      <pre><code>enum Status do
+    ACTIVE, INACTIVE, PENDING
+end
+</code></pre>
+
+      <h2>Usage</h2>
+      <pre><code>void processStatus(Status status) do
+    if status == Status.ACTIVE do
+        print("Processing active item")
+    else
+        if status == Status.INACTIVE do
+            print("Item is inactive")
+        else
+            print("Item is pending")
+        end
+    end
+end
+</code></pre>
+
+      <div class="see-also">
+        See also: <a href="pattern-matching.html">Pattern Matching</a>, <a href="result-maybe.html">Result & Maybe</a>
+      </div>
+    </div>
+  </main>
+  <footer>
+    <div class="wrap">Duende Docs</div>
+  </footer>
+</body>
+</html>
