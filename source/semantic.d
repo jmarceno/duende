@@ -160,6 +160,7 @@ class SemanticAnalyzer {
 	private struct ScopeEnv {
 		TypeInfo[string] table;
 		ScopeEnv* parent;
+		bool inLoop;
 
 		void define(string name, TypeInfo t) { table[name] = t; }
 		bool lookup(string name, out TypeInfo t) {
@@ -168,7 +169,7 @@ class SemanticAnalyzer {
 			return parent.lookup(name, t);
 		}
 		ScopeEnv child() {
-			ScopeEnv c; c.parent = &this; return c;
+			ScopeEnv c; c.parent = &this; c.inLoop = this.inLoop; return c;
 		}
 	}
 
@@ -201,6 +202,7 @@ class SemanticAnalyzer {
 		if (auto f = cast(FunctionDeclaration)s) {
 			// function body: new scope with params
 			auto child = env.child();
+			child.inLoop = false; // Reset loop context
 			foreach (p; f.parameters) {
 				child.define(p.name, typeInfo(p.type, p.customTypeName));
 			}
@@ -209,8 +211,17 @@ class SemanticAnalyzer {
 		}
 		if (auto m = cast(MethodDeclaration)s) {
 			auto child = env.child();
+			child.inLoop = false; // Reset loop context
 			foreach (p; m.parameters) child.define(p.name, typeInfo(p.type, p.customTypeName));
 			foreach (st; m.body) visitStmt(st, sourcePath, errs, child, depth + 1);
+			return;
+		}
+		if (auto sd = cast(StructDeclaration)s) {
+			foreach (m; sd.methods) visitStmt(m, sourcePath, errs, env, depth + 1);
+			return;
+		}
+		if (auto fd = cast(FrameDeclaration)s) {
+			foreach (m; fd.methods) visitStmt(m, sourcePath, errs, env, depth + 1);
 			return;
 		}
 		if (auto es = cast(ExpressionStatement)s) {
@@ -225,6 +236,13 @@ class SemanticAnalyzer {
 			visitExpr(ifs.condition, sourcePath, errs, env, depth + 1);
 			auto thenScope = env.child();
 			foreach (st; ifs.thenBranch) visitStmt(st, sourcePath, errs, thenScope, depth + 1);
+			if (ifs.elifClauses.length) {
+				foreach (ec; ifs.elifClauses) {
+					visitExpr(ec.condition, sourcePath, errs, env, depth + 1);
+					auto ecScope = env.child();
+					foreach (st; ec.body) visitStmt(st, sourcePath, errs, ecScope, depth + 1);
+				}
+			}
 			auto elseScope = env.child();
 			foreach (st; ifs.elseBranch) visitStmt(st, sourcePath, errs, elseScope, depth + 1);
 			return;
@@ -232,6 +250,7 @@ class SemanticAnalyzer {
 		if (auto fs = cast(ForStatement)s) {
 			// loop var is int
 			auto child = env.child();
+			child.inLoop = true;
 			child.define(fs.variable, typeInfo(DuendeType.INT));
 			visitExpr(fs.start, sourcePath, errs, child, depth + 1);
 			visitExpr(fs.end, sourcePath, errs, child, depth + 1);
@@ -240,6 +259,7 @@ class SemanticAnalyzer {
 		}
 		if (auto fi = cast(ForInStatement)s) {
 			auto child = env.child();
+			child.inLoop = true;
 			child.define(fi.variable, typeInfo(DuendeType.AUTO));
 			visitExpr(fi.iterable, sourcePath, errs, child, depth + 1);
 			foreach (st; fi.body) visitStmt(st, sourcePath, errs, child, depth + 1);
@@ -248,6 +268,7 @@ class SemanticAnalyzer {
 		if (auto ws = cast(WhileStatement)s) {
 			visitExpr(ws.condition, sourcePath, errs, env, depth + 1);
 			auto loopScope = env.child();
+			loopScope.inLoop = true;
 			foreach (st; ws.body) visitStmt(st, sourcePath, errs, loopScope, depth + 1);
 			return;
 		}
@@ -265,7 +286,21 @@ class SemanticAnalyzer {
 			}
 			return;
 		}
-		// other statements ignored for now (Break/Continue validity handled elsewhere)
+		if (auto bs = cast(BreakStatement)s) {
+			if (!env.inLoop) {
+				auto pos = normalizePos(bs.position, sourcePath);
+				errs.addError("Invalid use of 'break' outside of a loop", pos);
+			}
+			return;
+		}
+		if (auto cs = cast(ContinueStatement)s) {
+			if (!env.inLoop) {
+				auto pos = normalizePos(cs.position, sourcePath);
+				errs.addError("Invalid use of 'continue' outside of a loop", pos);
+			}
+			return;
+		}
+		// other statements ok
 	}
 
 	private TypeInfo visitExpr(Expression e, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
@@ -442,6 +477,7 @@ class SemanticAnalyzer {
 		}
 		if (auto le = cast(LambdaExpression)e) {
 			auto child = env.child();
+			child.inLoop = false;
 			foreach (p; le.parameters) child.define(p, typeInfo(DuendeType.AUTO));
 			visitExpr(le.body, sourcePath, errs, child, depth + 1);
 			return typeInfo(DuendeType.AUTO);

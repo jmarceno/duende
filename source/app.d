@@ -910,7 +910,6 @@ private void validateModuleSemantics(ModuleInfo info, SemanticErrorCollector err
     // Run modular analyzer (undefined vars, function calls, types)
     analyzeModule(info.program, info.moduleName, info.sourcePath, errorCollector);
     // Run legacy checks preserved here
-    validateBreakContinueUsage(info.program, info.moduleName, info.sourcePath, errorCollector);
     validateImportRequirements(info.program, info.moduleName, info.sourcePath, errorCollector);
     validateDefaultParameters(info.program, info.sourcePath, errorCollector);
 }
@@ -1012,74 +1011,6 @@ private void validateDefaultParameters(Program program, string sourcePath, Seman
     }
 }
 
-private void validateBreakContinueUsage(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector) {
-    void visitStmt(Statement s, int loopDepth) {
-        if (auto f = cast(FunctionDeclaration)s) {
-            // Nested function is its own control-flow context; loopDepth resets
-            foreach (st; f.body) visitStmt(st, 0);
-            return;
-        }
-        if (auto m = cast(MethodDeclaration)s) {
-            foreach (st; m.body) visitStmt(st, 0);
-            return;
-        }
-        if (auto fs = cast(ForStatement)s) {
-            foreach (st; fs.body) visitStmt(st, loopDepth + 1);
-            return;
-        }
-        if (auto fi = cast(ForInStatement)s) {
-            foreach (st; fi.body) visitStmt(st, loopDepth + 1);
-            return;
-        }
-        if (auto ws = cast(WhileStatement)s) {
-            foreach (st; ws.body) visitStmt(st, loopDepth + 1);
-            return;
-        }
-        if (auto es = cast(ExpressionStatement)s) {
-            // Only TryBlockExpression contains nested statements we must analyze
-            if (auto te = cast(TryBlockExpression)es.expression) {
-                foreach (st; te.statements) visitStmt(st, loopDepth);
-            }
-            return;
-        }
-        if (auto ifs = cast(IfStatement)s) {
-            foreach (st; ifs.thenBranch) visitStmt(st, loopDepth);
-            foreach (st; ifs.elseBranch) visitStmt(st, loopDepth);
-            return;
-        }
-        if (auto ms = cast(MatchStatement)s) {
-            foreach (c; ms.cases) {
-                foreach (st; c.body) visitStmt(st, loopDepth);
-            }
-            return;
-        }
-        if (auto breakStmt = cast(BreakStatement)s) {
-            if (loopDepth <= 0) {
-                string msg = "Invalid use of 'break' outside of a loop";
-                auto pos = breakStmt.position;
-                if (pos.file.length == 0) {
-                    pos.file = sourcePath;
-                }
-                errorCollector.addError(msg, pos);
-            }
-            return;
-        }
-        if (auto continueStmt = cast(ContinueStatement)s) {
-            if (loopDepth <= 0) {
-                string msg = "Invalid use of 'continue' outside of a loop";
-                auto pos = continueStmt.position;
-                if (pos.file.length == 0) {
-                    pos.file = sourcePath;
-                }
-                errorCollector.addError(msg, pos);
-            }
-            return;
-        }
-        // Other statements: ok
-    }
-
-    foreach (s; program.statements) visitStmt(s, 0);
-}
 
 private void validateImportRequirements(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector) {
     // Determine if this module explicitly imports std.math
