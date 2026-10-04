@@ -291,7 +291,7 @@ bool createDirectoryAsync(string dirname) {
 
 /// Spawn process
 string spawnProcess(string command, string[] args = []) {
-    string processId = format("process_%d", cast(int)MonoTime.currTime.ticks);
+    string processId = format("process_%d", MonoTime.currTime.ticks);
     
     try {
         auto pipes = pipeProcess([command] ~ args, Redirect.stdout | Redirect.stderr);
@@ -353,7 +353,7 @@ string createTlsContext(int kind = 0) {
     
     auto ctx = createTLSContext(contextKind);
     
-    string contextId = format("tls_%s_%d", kind == 0 ? "client" : "server", cast(int)MonoTime.currTime.ticks);
+    string contextId = format("tls_%s_%d", kind == 0 ? "client" : "server", MonoTime.currTime.ticks);
     writefln("TLS context created: %s (%s)", contextId, kind == 0 ? "client" : "server");
     return contextId;
 }
