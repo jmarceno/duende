@@ -12,6 +12,10 @@ It was born from my desire to have something that felt like a scripting language
 
 The language just tries to stay out of your way to allow you to do things, you will not find any "purity" here, OOP, Functional...if something is useful we borrow it. This means that no decisions here were taken with some grand theoretical justification, don't overthink why something is the way it is, it just is because I found it to be useful and/or fun, that's it.
 
+## How to take decisions
+All decisions should lead to a simple, clear, and consistent design that prioritizes readability, ease of use, and maintainability. We want to make the language easy to learn and use, so we should always prioritize clear and intuitive design while still being statically typed. Avoid making decisions that lead to hard to grasp concepts or behaviors, we are not creating a language for mathematicians or type theory fetishists.
+
+
 ## Layout
 
 - `source/` — lexer, parser, semantics, and D codegen
