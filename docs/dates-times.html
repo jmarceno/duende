@@ -52,8 +52,11 @@ print(formatDate(meetup, "%F %T"))
 </code></pre>
 
       <h2>Time zones</h2>
+      <p><code>date</code> and <code>dateTime</code> build values in the machine's local time zone. <code>toTZ</code> keeps the same instant and shows it at a fixed UTC offset, so on a machine running at UTC an 18:30 meetup is 15:30 at -03:00.</p>
       <pre><code>let auto meet_brt = toTZ(meetup, -3)
-print(formatDate(meet_brt, "%F %T%z"))
+print(formatDate(meet_brt, "%F %T%z"))        // 2025-05-20 15:30:00-03:00 on a UTC machine
+print(formatDate(toTZ(meetup, 5, 30), "%F %T%z")) // 2025-05-21 00:00:00+05:30 on a UTC machine
+print(formatDate(toUTC(meet_brt), "%F %T"))   // same instant as meetup: 2025-05-20 18:30:00 on a UTC machine
 </code></pre>
 
       <h2>Field extraction</h2>

@@ -401,7 +401,7 @@ mixin template DExpressionsMixin() {
                 auto dt = generateExpression(call.arguments[0]);
                 auto h = generateExpression(call.arguments[1]);
                 string m = call.arguments.length == 3 ? generateExpression(call.arguments[2]) : "0";
-                return "(() { auto __off = hours(" ~ h ~ ") + minutes(" ~ m ~ "); auto __tz = new immutable SimpleTimeZone(__off); return ((" ~ dt ~ ") - __off).toOtherTZ(__tz); })()";
+                return "(() { auto __off = hours(" ~ h ~ ") + minutes(" ~ m ~ "); auto __tz = new immutable SimpleTimeZone(__off); return (" ~ dt ~ ").toOtherTZ(__tz); })()";
             }
         }
         if (call.name == "year") {
