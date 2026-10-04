@@ -8,6 +8,8 @@ import duende.codegen.d.expressions;
 import duende.codegen.d.statements;
 import duende.codegen.d.matches;
 import duende.codegen.d.helpers;
+import duende.binding : bindArguments;
+import std.algorithm.searching : canFind;
 import std.format;
 import std.array;
 import std.string;

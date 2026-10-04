@@ -1,6 +1,7 @@
 module duende.semantic;
 
 import duende.ast;
+import duende.binding : bindArguments;
 import std.algorithm : canFind;
 import std.conv : to;
 import std.array : appender;
@@ -598,6 +599,7 @@ class SemanticAnalyzer {
 				if (checkedArg && i == 0) continue;
 				visitExpr(a, sourcePath, errs, env, depth + 1);
 			}
+			rejectNamedArguments(me.argumentNames, me.arguments, "method '" ~ me.method ~ "'", sourcePath, errs);
 			if (ot.base == DuendeType.CUSTOM && ot.name.length) {
 				if (auto agg = ot.name in aggregates) {
 					if (agg.isFrame && (me.method in agg.mutatingMethods) && receiverIsLet(me.object, env)) {
@@ -790,6 +792,7 @@ class SemanticAnalyzer {
 		}
 		if (auto cc = cast(ConstructorCallExpression)e) {
 			foreach (a; cc.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+			rejectNamedArguments(cc.argumentNames, cc.arguments, "constructor '" ~ cc.typeName ~ "'", sourcePath, errs);
 			return typeInfo(DuendeType.CUSTOM, cc.typeName);
 		}
 		if (auto ce2 = cast(CastExpression)e) {
@@ -1010,79 +1013,55 @@ class SemanticAnalyzer {
 		return false;
 	}
 
+	// Methods and constructors are not bound by name yet; reject names instead of silently passing them positionally
+	private void rejectNamedArguments(const string[] names, Expression[] args, string what, string sourcePath, SemanticErrorCollector errs) {
+		foreach (i, an; names) {
+			if (an.length) {
+				errs.addError("Named argument '" ~ an ~ "' is not supported in call to " ~ what ~ ": named arguments are only supported for functions", getExprPos(args[i], sourcePath));
+			}
+		}
+	}
+
 	private void checkFunctionCall(CallExpression ce, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
 		// Only check functions declared in this module; ignore providers/builtins
-		if (!(ce.name in functions)) return;
+		if (!(ce.name in functions)) {
+			// Named arguments are bound against the callee's declared parameters, which are only known
+			// for functions declared in this module; elsewhere they would be silently passed positionally
+			foreach (i, an; ce.argumentNames) {
+				if (an.length) {
+					errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': named arguments require a function declared in this module", getExprPos(ce.arguments[i], sourcePath));
+				}
+			}
+			// The callee is unknown here (builtin or provider), but direct calls in its arguments,
+			// such as print(f(x: 1)), still need their arguments bound and checked
+			foreach (arg; ce.arguments) {
+				if (cast(CallExpression)arg !is null) visitExpr(arg, sourcePath, errs, env, depth + 1);
+			}
+			return;
+		}
 		auto f = functions[ce.name];
 
-		// Build mapping param->provided arg index
-		bool[string] provided;
-		size_t positionalIndex = 0;
-		// First pass: validate named args
+		auto binding = bindArguments(ce.name, f.parameters, ce.arguments.length, ce.argumentNames);
+		foreach (be; binding.errors) {
+			auto pos = be.argIndex >= 0 ? getExprPos(ce.arguments[be.argIndex], sourcePath) : normalizePos(ce.position, sourcePath);
+			errs.addError(be.message, pos);
+		}
+
+		// Type-check every supplied argument once, in source order
+		long[] paramForArg = new long[ce.arguments.length];
+		paramForArg[] = -1;
+		foreach (j, ai; binding.argForParam) if (ai >= 0) paramForArg[ai] = cast(long)j;
 		foreach (i, arg; ce.arguments) {
-			string an = (i < ce.argumentNames.length) ? ce.argumentNames[i] : "";
-			if (an.length == 0) continue; // positional, later
-			// find parameter by name
-			long pi = -1;
-			foreach (j, p; f.parameters) { if (p.name == an) { pi = cast(long)j; break; } }
-				if (pi < 0) {
-					auto pos = getExprPos(arg, sourcePath);
-				errs.addError("Unknown named parameter '" ~ an ~ "' for function '" ~ ce.name ~ "'", pos);
+			if (paramForArg[i] < 0) {
+				visitExpr(arg, sourcePath, errs, env, depth + 1);
 				continue;
 			}
-			if (auto prev = an in provided) {
-					auto pos = getExprPos(arg, sourcePath);
-				errs.addError("Duplicate argument for parameter '" ~ an ~ "' in call to '" ~ ce.name ~ "'", pos);
-				continue;
-			}
-			provided[an] = true;
-			// type-check this arg
-			auto need = f.parameters[pi];
+			auto need = f.parameters[paramForArg[i]];
 			auto needType = declaredNode(need.typeNode, need.type, need.customTypeName);
 			auto got = visitExpr(arg, sourcePath, errs, env, depth + 1, needType);
 			if (!typeCompatible(needType, got)) {
-				auto pos = getExprPos(arg, sourcePath);
-				errs.addError("Argument type mismatch for parameter '" ~ need.name ~ "' in call to '" ~ ce.name ~ "'", pos);
+				errs.addError("Argument type mismatch for parameter '" ~ need.name ~ "' in call to '" ~ ce.name ~ "'", getExprPos(arg, sourcePath));
 			}
-		}
-
-		// Second pass: consume positional args in parameter order, skipping params already provided by name
-		foreach (p; f.parameters) {
-			if (p.name in provided) continue;
-			// find next positional arg
-			while (positionalIndex < ce.arguments.length && ce.argumentNames[positionalIndex].length != 0) {
-				positionalIndex++;
-			}
-			if (positionalIndex < ce.arguments.length) {
-				auto arg = ce.arguments[positionalIndex++];
-				auto needType = declaredNode(p.typeNode, p.type, p.customTypeName);
-				auto got = visitExpr(arg, sourcePath, errs, env, depth + 1, needType);
-				if (!typeCompatible(needType, got)) {
-					auto pos = getExprPos(arg, sourcePath);
-					errs.addError("Argument type mismatch for parameter '" ~ p.name ~ "' in call to '" ~ ce.name ~ "'", pos);
-				}
-				provided[p.name] = true;
-			} else {
-				// no more positional args; parameter must have default
-				if (p.defaultValue is null) {
-					auto pos = normalizePos(ce.position, sourcePath);
-					errs.addError("Missing argument for parameter '" ~ p.name ~ "' in call to '" ~ ce.name ~ "'", pos);
-				}
-			}
-		}
-
-		// Extra positional args beyond parameters?
-		// Count non-named args
-		size_t positionalCount = 0;
-		foreach (i, _; ce.arguments) {
-			if (ce.argumentNames[i].length == 0) positionalCount++;
-		}
-		// Number of parameters not provided by name or defaulted used to match positionally
-		size_t nonNamedParams = 0;
-		foreach (p; f.parameters) if (!(p.name in provided)) nonNamedParams++;
-		if (positionalCount > f.parameters.length) {
-			auto pos = normalizePos(ce.position, sourcePath);
-			errs.addError("Too many arguments in call to '" ~ ce.name ~ "'", pos);
 		}
 	}
 }

@@ -54,6 +54,21 @@ class TestDuendeExamples:
         assert returncode == 0, f"Program failed: {stderr}"
         assert stdout.strip() == "55", f"Expected '55', got '{stdout.strip()}'"
 
+    def test_named_arguments_example(self):
+        """Named/positional arguments bind once and evaluate in source order"""
+        source_file = self.examples_dir / "named_arguments.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        assert stdout.splitlines() == [
+            "123", "cab",
+            "207", "xy",
+            "304", "zw",
+            "209",
+            "205",
+            "calls=7",
+        ]
+
     def test_basic_arithmetic_example(self):
         """Test the basic_arithmetic.du example"""
         source_file = self.examples_dir / "basic_arithmetic.du"
