@@ -4,7 +4,6 @@
 .tmp/
 .temp/
 .github/
-CLAUDE.md
 .idea/
 test_dir/
 test_output.txt
@@ -364,4 +363,3 @@ duende-test-*
 examples/duende_build/
 duende_build/
 .duende_modules/
-
