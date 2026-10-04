@@ -27,26 +27,37 @@
       <ul>
         <li>Lists
           <ul>
-            <li><code>add(x: any)</code></li>
+            <li><code>add(x: T)</code></li>
             <li><code>slice(start: int, end: int) -&gt; list&lt;T&gt;</code></li>
             <li><code>length</code> property and <code>length()</code> method</li>
             <li><code>empty</code> property</li>
-            <li><code>first</code> / <code>last</code> properties (return -1 or "-1" for strings when empty)</li>
+            <li><code>first</code> / <code>last</code> properties, each <code>Maybe&lt;T&gt;</code></li>
+            <li><code>xs[i] = value</code> replaces one element</li>
             <li><code>sort()</code> (in-place, lexicographic)</li>
             <li><code>join(sep: string) -&gt; string</code></li>
           </ul>
         </li>
         <li>Dictionaries
           <ul>
-            <li><code>has(key: string) -&gt; bool</code></li>
+            <li><code>dict&lt;K, V&gt;</code> keeps the key type and the value type</li>
+            <li><code>has(key: K) -&gt; bool</code></li>
+            <li><code>get(key: K) -&gt; Maybe&lt;V&gt;</code></li>
+            <li><code>d[key] = value</code> inserts or replaces one entry</li>
             <li><code>length</code> property and <code>empty</code> property</li>
-            <li><code>keys -&gt; list&lt;string&gt;</code>, <code>values -&gt; list&lt;string&gt;</code></li>
-            <li><code>items() -&gt; list&lt;{key:string, value:string}&gt;</code></li>
+            <li><code>keys -&gt; list&lt;K&gt;</code>, <code>values -&gt; list&lt;V&gt;</code></li>
+            <li><code>items()</code> yields entries with <code>.key</code> and <code>.value</code></li>
           </ul>
         </li>
       </ul>
+      <h2>Dictionary types</h2>
+      <p><code>dict&lt;K, V&gt;</code> is the dictionary type. Keys and values stay those types through the literal, lookup, insertion, <code>keys</code>, <code>values</code>, and <code>items()</code>. <code>V</code> may be a struct, a frame, or another collection. A value that is not already <code>V</code> is written with an explicit conversion such as <code>string(8080)</code>. An <code>int</code> may be stored in a <code>float</code> slot. Mixed key types or mixed value types are rejected.</p>
+      <p><code>auto</code> infers <code>K</code> and <code>V</code> from a non-empty literal when every key has one known type and every value has one known type. An empty <code>{}</code> takes <code>K</code> and <code>V</code> from the declaration. <code>let auto d = {}</code> has nothing to infer, so it is rejected.</p>
+      <p>A bare <code>dict</code> means <code>dict&lt;string, string&gt;</code>. That is the old string dictionary. It does not turn numbers or bools into text. File metadata, process environment, and XML attributes are string dictionaries.</p>
+      <h2>Missing elements</h2>
+      <p><code>first</code> and <code>last</code> are <code>Maybe&lt;T&gt;</code>. An empty list is <code>None</code>. A list that contains <code>-1</code> or <code>"-1"</code> is <code>Some</code> of that value. Read it with <code>? else</code>.</p>
+      <p><code>xs[i]</code> and <code>d[key]</code> require the element to exist. A missing index or key aborts the program. <code>has(key)</code> is the check before indexing. <code>get(key)</code> is the absence check: it returns <code>Maybe&lt;V&gt;</code>, so a stored <code>0</code> or <code>-1</code> is different from a missing key. <code>for x in dict</code> yields values.</p>
       <h2>Bindings</h2>
-      <p><code>let</code> and <code>var</code> control the name, not the collection. A <code>let</code> list or dict cannot be assigned a new collection. <code>add</code> and <code>sort</code> still update the existing list, whether the name was written <code>let list&lt;int&gt;</code> or <code>let auto</code>. <code>sort</code> is in place, so another name for that list sees the new order. <code>add</code> can allocate a larger array and leave older names pointing at the previous elements.</p>
+      <p><code>let</code> and <code>var</code> control the name, not the collection. A <code>let</code> list or dict cannot be assigned a new collection. <code>add</code>, <code>sort</code>, <code>xs[i] = value</code>, and <code>d[key] = value</code> still update the existing collection, whether the name was written <code>let list&lt;int&gt;</code> or <code>let auto</code>. <code>sort</code> is in place, so another name for that list sees the new order. <code>add</code> can allocate a larger array and leave older names pointing at the previous elements. <code>var</code> can also replace the collection with another one.</p>
 
       <h2>Lists</h2>
   <pre><code>var list&lt;int&gt; numbers = [1, 2, 3, 4, 5]
@@ -55,30 +66,41 @@ let int first = numbers[0]
 print(numbers.length)
 print(numbers.empty)
 let list&lt;int&gt; slice = numbers.slice(1, 4)
-let numbers_first = numbers.first
-let numbers_last = numbers.last
+let int numbers_first = numbers.first ? else 0
+let int numbers_last = numbers.last ? else 0
 // In-place sort (lexicographic)
 var list&lt;string&gt; names = ["bob", "alice", "carol"]
 names.sort()
-print(names.first) // "alice"
-print(names.last)  // "carol"
+print(names.first ? else "") // "alice"
+print(names.last ? else "")  // "carol"
+
+let list&lt;int&gt; empty = []
+print(empty.first ? else "absent") // "absent"
+let list&lt;int&gt; neg = [-1]
+print(neg.first ? else 0) // -1
 </code></pre>
 
       <h2>Dictionaries</h2>
-      <pre><code>var dict config = {"host": "localhost", "port": 8080}
+      <pre><code>var dict&lt;string, int&gt; config = {"port": 8080}
 if config.has("port") do
     let int port = config["port"]
 end
+config["extra"] = 1
+let int missing = config.get("host") ? else 0
+
+let dict&lt;string, string&gt; text = {"port": string(8080)}
+let auto inferred = {"n": 7}
 
 print(config.length)
 print(config.empty)
-let list&lt;string&gt; keys = config.keys
-let list&lt;string&gt; values = config.values
+let list&lt;string&gt; keys = text.keys
+let list&lt;string&gt; values = text.values
 </code></pre>
 
   <h2>Empty collections</h2>
   <pre><code>let list&lt;string&gt; xs = []
-let dict d = {}
+let dict&lt;string, int&gt; d = {}
+let dict text = {} // dict&lt;string, string&gt;
 </code></pre>
 
       <div class="see-also">

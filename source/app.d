@@ -1274,6 +1274,14 @@ void printExpression(Expression expr, int indent = 0) {
         printExpression(propAssignment.object, indent + 2);
         writefln("%s  Value:", indentStr);
         printExpression(propAssignment.value, indent + 2);
+    } else if (auto indexAssignment = cast(IndexAssignmentExpression)expr) {
+        writefln("%sIndexAssignmentExpression:", indentStr);
+        writefln("%s  Object:", indentStr);
+        printExpression(indexAssignment.object, indent + 2);
+        writefln("%s  Index:", indentStr);
+        printExpression(indexAssignment.index, indent + 2);
+        writefln("%s  Value:", indentStr);
+        printExpression(indexAssignment.value, indent + 2);
     } else if (auto matchExpr = cast(MatchExpression)expr) {
         writefln("%sMatchExpression:", indentStr);
         writefln("%s  Subject:", indentStr);

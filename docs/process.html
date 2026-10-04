@@ -34,12 +34,12 @@
         <h3>Available functions and types</h3>
         <ul>
           <li>Types: <code>Pid</code>, <code>ProcessPipes</code>, <code>Redirect</code>, <code>Config</code></li>
-          <li><code>environment</code> (dict-like)</li>
+          <li><code>environment</code> (<code>dict&lt;string, string&gt;</code>)</li>
           <li><code>spawnProcess(argv: list, ...)</code>, <code>spawnShell(cmd: string, ...)</code></li>
           <li><code>pipeProcess(argv: list, redir)</code>, <code>pipeShell(cmd: string, redir)</code></li>
           <li><code>wait(pid) -&gt; int</code>, <code>tryWait(pid) -&gt; Maybe&lt;int&gt;</code>, <code>kill(pid)</code></li>
-          <li><code>execute(args: list, env: dict? = null, config = none, workDir: string? = null) -&gt; ExecResult</code></li>
-          <li><code>executeShell(cmd: string, env: dict? = null, config = none, workDir: string? = null) -&gt; ExecResult</code></li>
+          <li><code>execute(args: list, env: dict&lt;string, string&gt;? = null, config = none, workDir: string? = null) -&gt; ExecResult</code></li>
+          <li><code>executeShell(cmd: string, env: dict&lt;string, string&gt;? = null, config = none, workDir: string? = null) -&gt; ExecResult</code></li>
           <li><code>readAllStdout(pipes: ProcessPipes) -&gt; string</code>, <code>readAllStderr(pipes: ProcessPipes) -&gt; string</code></li>
         </ul>
       </section>

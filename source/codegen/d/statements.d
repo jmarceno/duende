@@ -148,10 +148,10 @@ mixin template DStatementsMixin() {
                     initExpr = buf.data;
                 } else {
                     // Typed list with elements: emit raw elements and let D type-check
-                    initExpr = generateExpected(declaredContext(declaredType), varDecl.initializer);
+                    initExpr = generateWithNode(varDecl.typeNode, declaredContext(declaredType), varDecl.initializer);
                 }
             } else {
-                initExpr = generateExpected(declaredContext(declaredType), varDecl.initializer);
+                initExpr = generateWithNode(varDecl.typeNode, declaredContext(declaredType), varDecl.initializer);
             }
 
             if (varDecl.type == DuendeType.STRING &&
@@ -165,13 +165,6 @@ mixin template DStatementsMixin() {
 
             if (varDecl.type == DuendeType.INT && cast(IndexExpression)varDecl.initializer !is null) {
                 initExpr ~= ".to!long";
-            }
-
-            if (varDecl.type == DuendeType.INT && cast(PropertyExpression)varDecl.initializer !is null) {
-                auto propExpr = cast(PropertyExpression)varDecl.initializer;
-                if (propExpr.property == "first" || propExpr.property == "last") {
-                    initExpr = "(" ~ initExpr ~ ").to!long";
-                }
             }
 
             // Qualify enum member on initialization when declaring an enum-typed variable
@@ -246,7 +239,7 @@ mixin template DStatementsMixin() {
             }
         }
         string storedType = declaredContext(declaredType);
-        variableTypes[varDecl.name] = VarInfo(trackedType, custom, varDecl.innerType, varDecl.innerCustomTypeName, storedType);
+        variableTypes[varDecl.name] = VarInfo(trackedType, custom, varDecl.innerType, varDecl.innerCustomTypeName, storedType, varDecl.typeNode);
         if (atModuleScope || varDecl.isGlobal)
             globalVarTypes[varDecl.name] = variableTypes[varDecl.name];
 
@@ -261,7 +254,14 @@ mixin template DStatementsMixin() {
     private void bindParameter(Parameter param, string pType) {
         string stored = (param.type == DuendeType.AUTO) ? "" : pType;
         string innerCustom = param.typeNode.present ? param.typeNode.legacyInnerCustom() : null;
-        variableTypes[param.name] = VarInfo(param.type, param.customTypeName, param.innerType, innerCustom, stored);
+        TypeNode node = param.typeNode;
+        if (node.present && node.base == DuendeType.DICT && node.args.length < 2) {
+            node = TypeNode.generic(DuendeType.DICT, [
+                TypeNode.of(DuendeType.STRING),
+                TypeNode.of(DuendeType.STRING)
+            ]);
+        }
+        variableTypes[param.name] = VarInfo(param.type, param.customTypeName, param.innerType, innerCustom, stored, node);
     }
 
     /**
@@ -369,6 +369,7 @@ mixin template DStatementsMixin() {
         currentFunctionReturnType = DuendeType.VOID;
         currentFunctionReturnInnerType = DuendeType.VOID;
         currentFunctionReturnCustomTypeName = null;
+        currentFunctionReturnNode = TypeNode.init;
         currentFunctionReturnDType = "";
 
         return result.data;
@@ -379,7 +380,7 @@ mixin template DStatementsMixin() {
      */
     private string generateReturnStatement(ReturnStatement retStmt) {
         if (retStmt.value) {
-            return indent() ~ "return " ~ generateExpected(currentFunctionReturnDType, retStmt.value) ~ ";\n";
+            return indent() ~ "return " ~ generateWithNode(currentFunctionReturnNode, currentFunctionReturnDType, retStmt.value) ~ ";\n";
         }
         return indent() ~ "return;\n";
     }

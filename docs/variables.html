@@ -31,7 +31,7 @@
         <li><code>var</code> — the name can be assigned again: <code>var int y = 1</code> and <code>var auto y = 1</code>.</li>
         <li>Parameters are reassignable locals. Reassigning a parameter does not change the caller's binding.</li>
         <li><code>for</code> and <code>for-in</code> names, and names bound in a <code>match</code>, are <code>let</code> bindings.</li>
-        <li>Lists, dicts, and bytes are shared values. <code>let list&lt;int&gt; xs = [1]</code> cannot be rebound, but <code>xs.add(2)</code> and <code>xs.sort()</code> update that value. An alias created before <code>sort</code> sees the sorted elements. <code>add</code> may detach a list from older aliases when the array grows.</li>
+        <li>Lists, dicts, and bytes are shared values. <code>let list&lt;int&gt; xs = [1]</code> cannot be rebound, but <code>xs.add(2)</code>, <code>xs[0] = 2</code>, and <code>xs.sort()</code> update that value. <code>let dict&lt;string, int&gt; d = {"a": 1}</code> cannot be rebound, but <code>d["a"] = 2</code> and <code>d["b"] = 3</code> update that dictionary. An alias created before <code>sort</code> sees the sorted elements. <code>add</code> may detach a list from older aliases when the array grows.</li>
         <li>Assigning to a <code>let</code> name is rejected. So is calling a frame method that writes fields, or writing a frame field, when the receiver name is <code>let</code>.</li>
       </ul>
       <pre><code>let int x = 42
@@ -42,7 +42,7 @@ print(x + y)
 let list&lt;string&gt; names = ["b", "a"]
 let list&lt;string&gt; same = names
 same.sort()
-print(names.first) // "a"
+print(names.first ? else "") // "a"
 </code></pre>
       <p>A <code>let</code> whose value is not shared (<code>int</code>, <code>float</code>, <code>string</code>, <code>bool</code>, enum, struct, and other value types) is stored so the generated program cannot assign it again. A runtime initializer for that kind of global runs at startup, in source order, when no earlier statement or deferred <code>var</code> has to run first. If one does, the initializer stays in source order among the top-level statements and the compiler still rejects a later assignment. Lists, dicts, bytes, frames, and bindings whose type is still unresolved keep mutable storage because their contents, or the D representation, are not a frozen value. <code>let</code> still forbids rebinding those names.</p>
 

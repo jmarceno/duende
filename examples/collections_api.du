@@ -5,25 +5,22 @@ int main() do
     let list<int> numbers = [1, 2, 3, 4, 5]
     print("List length: ${numbers.length}")
     print("List empty: ${numbers.empty}")
-    let int numbers_first_res = numbers.first
-    let string numbers_first_val = numbers_first_res
+    let int numbers_first_val = numbers.first ? else 0
     print("List first: ${numbers_first_val}")
-    let int numbers_last_res = numbers.last
-    let string numbers_last_val = numbers_last_res
+    let int numbers_last_val = numbers.last ? else 0
     print("List last: ${numbers_last_val}")
     
     // Test list slice method
     let list<int> slice = numbers.slice(1, 4)
     print("Slice length: ${slice.length}")
-    let int slice_first_res = slice.first
-    let string slice_first_val = slice_first_res
+    let int slice_first_val = slice.first ? else 0
     print("Slice first: ${slice_first_val}")
 
     // Test list sort method (in-place)
     var list<string> unsorted = ["b", "a", "c"]
     unsorted.sort()
-    let string first_sorted = unsorted.first
-    let string last_sorted = unsorted.last
+    let string first_sorted = unsorted.first ? else ""
+    let string last_sorted = unsorted.last ? else ""
     print("Sorted first: ${first_sorted}")
     print("Sorted last: ${last_sorted}")
     
@@ -32,12 +29,11 @@ int main() do
     print("Before add: ${mutable_list.length}")
     mutable_list.add(30)
     print("After add: ${mutable_list.length}")
-    let int added_last_res = mutable_list.last
-    let string added_last_val = added_last_res
+    let int added_last_val = mutable_list.last ? else 0
     print("Added last: ${added_last_val}")
     
     // Test dictionary field access
-    let dict config = {"host": "localhost", "port": 8080, "debug": true}
+    let dict<string, string> config = {"host": "localhost", "port": string(8080), "debug": string(true)}
     print("Dict length: ${config.length}")
     print("Dict empty: ${config.empty}")
     
@@ -51,8 +47,7 @@ int main() do
     let list<string> empty_list = []
     print("Empty list length: ${empty_list.length}")
     print("Empty list empty: ${empty_list.empty}")
-    let string empty_first_res = empty_list.first
-    let string empty_first_val = empty_first_res
+    let string empty_first_val = empty_list.first ? else "none"
     print("Empty list first: ${empty_first_val}")
     
     let dict empty_dict = {}

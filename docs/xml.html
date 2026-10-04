@@ -17,13 +17,13 @@
     <section>
       <h2>Available functions and types</h2>
       <ul>
-        <li>Type: <code>XmlNode</code> with fields <code>name</code>, <code>attributes: dict</code>, <code>text</code>, <code>children: list&lt;XmlNode&gt;</code></li>
+        <li>Type: <code>XmlNode</code> with fields <code>name</code>, <code>attributes: dict&lt;string, string&gt;</code>, <code>text</code>, <code>children: list&lt;XmlNode&gt;</code></li>
         <li><code>parse(xml: string) -&gt; XmlNode</code>, <code>parseFile(path: string) -&gt; XmlNode</code></li>
         <li><code>find(node: XmlNode, tag: string) -&gt; list&lt;XmlNode&gt;</code>, <code>findAll(node, tag) -&gt; list&lt;XmlNode&gt;</code></li>
         <li><code>getAttr(node, name: string, default: string = "") -&gt; string</code>, <code>setAttr(node, name, value)</code></li>
         <li><code>getText(node) -&gt; string</code>, <code>setText(node, value: string)</code></li>
         <li><code>fromList(parentTag: string, items: list, itemTag: string = "item") -&gt; XmlNode</code></li>
-        <li><code>fromData(dict, children: list? = null) -&gt; XmlNode</code></li>
+        <li><code>fromData(dict&lt;string, string&gt;, children: list? = null) -&gt; XmlNode</code></li>
         <li><code>toXml(node) -&gt; string</code>, <code>toXmlPretty(node) -&gt; string</code></li>
       </ul>
 

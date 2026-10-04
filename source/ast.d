@@ -414,6 +414,20 @@ class PropertyAssignmentExpression : Expression {
     }
 }
 
+// xs[i] = v and d[k] = v update the existing collection.
+class IndexAssignmentExpression : Expression {
+    mixin PositionMixin;
+    Expression object;
+    Expression index;
+    Expression value;
+
+    this(Expression object, Expression index, Expression value) {
+        this.object = object;
+        this.index = index;
+        this.value = value;
+    }
+}
+
 class BinaryExpression : Expression {
     mixin PositionMixin;
     Expression left;

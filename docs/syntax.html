@@ -73,7 +73,7 @@ let int y = f(2, b: 5)
         <li>Floats are doubles: <code>3.14</code></li>
         <li>Strings use double quotes and support interpolation.</li>
         <li>Booleans: <code>true</code>, <code>false</code></li>
-        <li>Lists: <code>[1, 2, 3]</code>; Dicts: <code>{"k": 1}</code></li>
+        <li>Lists: <code>[1, 2, 3]</code>; Dicts: <code>{"k": 1}</code> infers <code>dict&lt;string, int&gt;</code> under <code>auto</code>, or matches a declared <code>dict&lt;K, V&gt;</code></li>
         <li>Bytes: <code>let bytes b = [1, 2, 255]</code> (see <a href="bytes.html">Bytes</a>)</li>
       </ul>
 
@@ -89,7 +89,7 @@ print("Hello ${name}, ratio=${ratio|%.2f}")
         <li>Arithmetic: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>%</code> (modulo)</li>
         <li>Comparison: <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></li>
         <li>Boolean: <code>!</code>, <code>&&</code>, <code>||</code></li>
-        <li>Indexing: <code>a[i]</code>; dict: <code>d["key"]</code></li>
+        <li>Indexing: <code>a[i]</code>; dict: <code>d["key"]</code>. A missing index or key aborts. Assignment <code>a[i] = v</code> and <code>d[k] = v</code> updates that collection</li>
       </ul>
 
       <div class="see-also">

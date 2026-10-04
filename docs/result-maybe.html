@@ -69,7 +69,7 @@ take(Error("missing"))
       <p><code>Result</code> and <code>Maybe</code> are the same types in every module. A function in one file can return <code>Ok</code>, <code>Error</code>, <code>Some</code>, or <code>None</code>, and another file can store that value, pass it on, or unwrap it.</p>
 
       <h2>Maybe</h2>
-      <p><code>Some(value)</code> or <code>None</code> represent optional values.</p>
+      <p><code>Some(value)</code> or <code>None</code> represent optional values. List <code>first</code> and <code>last</code>, and dictionary <code>get</code>, return <code>Maybe</code> so a missing element is not the value <code>-1</code>.</p>
       <pre><code>let Maybe&lt;string&gt; maybe_some = Some("Hello")
 let string s1 = maybe_some ? else "default"
 

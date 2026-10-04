@@ -43,7 +43,7 @@
         <li><code>removeDir(path: string) -&gt; Result&lt;bool&gt;</code> (recursive)</li>
         <li><code>getCwd() -&gt; Result&lt;string&gt;</code></li>
         <li><code>fileSize(path: string) -&gt; Result&lt;int&gt;</code></li>
-        <li><code>getMetadata(path: string) -&gt; Result&lt;dict&gt;</code> (keys: <code>isDir</code>, <code>isFile</code>, <code>size</code>)</li>
+        <li><code>getMetadata(path: string) -&gt; Result&lt;dict&lt;string, string&gt;&gt;</code> (keys: <code>isDir</code>, <code>isFile</code>, <code>size</code>, all stored as text)</li>
         <li><code>joinPath(a: string, b: string, ...) -&gt; string</code></li>
       </ul>
 

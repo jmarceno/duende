@@ -53,7 +53,8 @@ int main() do
     let list<string> names = ["b", "a", "c"]
     let list<string> same = names
     same.sort()
-    print("sorted:${names.first}")
+    let string sortedName = names.first ? else "missing"
+    print("sorted:${sortedName}")
 
     let list<int> grown = [1]
     grown.add(2)
@@ -61,7 +62,8 @@ int main() do
 
     let auto namesAuto = ["z", "y"]
     namesAuto.sort()
-    print("autoSorted:${namesAuto.first}")
+    let string autoSortedName = namesAuto.first ? else "missing"
+    print("autoSorted:${autoSortedName}")
 
     let point p = point(1.0, 2.0)
     let point moved = p.move(3.0, 4.0)

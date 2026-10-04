@@ -31,10 +31,21 @@ mixin template DExpressionsMixin() {
         return code;
     }
 
+    // expectedNode is the Duende type of this expression. Child expressions opt in.
+    private string generateWithNode(TypeNode node, string expected, Expression expr) {
+        TypeNode prev = exprExpectedNode;
+        exprExpectedNode = node;
+        string code = generateExpected(expected, expr);
+        exprExpectedNode = prev;
+        return code;
+    }
+
     string generateExpression(Expression expr) {
         // The expected type applies to this expression. Nested expressions opt in.
         string expected = exprExpectedType;
+        TypeNode expectedNode = exprExpectedNode;
         exprExpectedType = "";
+        exprExpectedNode = TypeNode.init;
         if (auto literal = cast(LiteralExpression)expr) {
             return generateLiteral(literal);
         }
@@ -53,8 +64,12 @@ mixin template DExpressionsMixin() {
         // Support pseudo-call form for builtin-like safeCast with first arg as TypeLiteralExpression, via CallExpression handling
         if (auto assignment = cast(AssignmentExpression)expr) {
             string rhsExpected;
-            if (auto viPtr = assignment.variable in variableTypes) rhsExpected = viPtr.dType;
-            string rhs = generateExpected(rhsExpected, assignment.value);
+            TypeNode rhsNode;
+            if (auto viPtr = assignment.variable in variableTypes) {
+                rhsExpected = viPtr.dType;
+                rhsNode = viPtr.typeNode;
+            }
+            string rhs = generateWithNode(rhsNode, rhsExpected, assignment.value);
             // If assigning an unqualified enum member to an enum-typed variable, qualify it with the enum name
             if (assignment.variable in variableTypes) {
                 auto vi = variableTypes[assignment.variable];
@@ -71,6 +86,9 @@ mixin template DExpressionsMixin() {
         if (auto propAssignment = cast(PropertyAssignmentExpression)expr) {
             return generateExpression(propAssignment.object) ~ "." ~ propAssignment.property ~ " = " ~ generateExpression(propAssignment.value);
         }
+        if (auto indexAssignment = cast(IndexAssignmentExpression)expr) {
+            return generateIndexAssignment(indexAssignment);
+        }
         if (auto interpolation = cast(StringInterpolationExpression)expr) {
             return generateStringInterpolation(interpolation);
         }
@@ -84,10 +102,10 @@ mixin template DExpressionsMixin() {
             return generateBytesLiteral(bytes);
         }
         if (auto list = cast(ListLiteralExpression)expr) {
-            return generateListLiteral(list);
+            return generateListLiteral(list, expected);
         }
         if (auto dict = cast(DictLiteralExpression)expr) {
-            return generateDictLiteral(dict);
+            return generateDictLiteral(dict, expected, expectedNode);
         }
         if (auto method = cast(MethodCallExpression)expr) {
             return generateMethodCall(method);
@@ -885,35 +903,10 @@ mixin template DExpressionsMixin() {
             case "hit":
                 return obj ~ ".hit";
             case "first":
-                // Return -1 (or "-1" for string lists) when empty
-                if (auto ve = cast(VariableExpression)property.object) {
-                    if (ve.name in variableTypes) {
-                        auto vi = variableTypes[ve.name];
-                        if (vi.type == DuendeType.LIST && (!vi.custom.length)) {
-                            if (vi.inner == DuendeType.STRING) {
-                                return obj ~ ".length > 0 ? " ~ obj ~ "[0] : \"-1\"";
-                            } else {
-                                return obj ~ ".length > 0 ? " ~ obj ~ "[0] : cast(typeof(" ~ obj ~ "[0]))(-1)";
-                            }
-                        }
-                    }
-                }
-                // Fallback unknown element type: coerce -1 via typeof
-                return obj ~ ".length > 0 ? " ~ obj ~ "[0] : cast(typeof(" ~ obj ~ "[0]))(-1)";
+                // None when the list is empty. A stored -1 or "-1" stays Some.
+                return "duende_list_first(" ~ obj ~ ")";
             case "last":
-                if (auto ve = cast(VariableExpression)property.object) {
-                    if (ve.name in variableTypes) {
-                        auto vi = variableTypes[ve.name];
-                        if (vi.type == DuendeType.LIST && (!vi.custom.length)) {
-                            if (vi.inner == DuendeType.STRING) {
-                                return obj ~ ".length > 0 ? " ~ obj ~ "[" ~ obj ~ ".length - 1] : \"-1\"";
-                            } else {
-                                return obj ~ ".length > 0 ? " ~ obj ~ "[" ~ obj ~ ".length - 1] : cast(typeof(" ~ obj ~ "[0]))(-1)";
-                            }
-                        }
-                    }
-                }
-                return obj ~ ".length > 0 ? " ~ obj ~ "[" ~ obj ~ ".length - 1] : cast(typeof(" ~ obj ~ "[0]))(-1)";
+                return "duende_list_last(" ~ obj ~ ")";
             case "keys":
                 return obj ~ ".keys";
             case "values":
@@ -940,18 +933,13 @@ mixin template DExpressionsMixin() {
     /**
      * Generate list literals (arrays in D).
      */
-    private string generateListLiteral(ListLiteralExpression list) {
+    private string generateListLiteral(ListLiteralExpression list, string expected) {
         auto result = appender!string();
-        // Try to detect expected element type from assignment context when available
-        string elemType = "string"; // default legacy behavior
-        // Heuristic: if immediately within an assignment or variable declaration, the variableTypes map will hold the declared type
-        // We can't directly access the LHS here, but for empty lists we can still emit a typed init using the last declared var if any
-        // As a safer approach, emit 'typeof(__tmp)[]' is not available; instead rely on variable declaration code using explicit type
 
         if (list.elements.length == 0) {
-            // Empty list literal: return a typed empty array matching the declared list element type when known
-            // We cannot know the target variable here; emit a generic empty literal requiring context. Use (elem[]).init with default string.
-            result ~= "(string[]).init";
+            string ty = "string[]";
+            if (expected.length && expected != "auto" && expected != "void") ty = expected;
+            result ~= "(" ~ ty ~ ").init";
             return result.data;
         }
         result ~= "[";
@@ -966,19 +954,63 @@ mixin template DExpressionsMixin() {
     /**
      * Generate dictionary literals (associative arrays in D).
      */
-    private string generateDictLiteral(DictLiteralExpression dict) {
+    private string generateDictLiteral(DictLiteralExpression dict, string expected, TypeNode expectedNode) {
         auto result = appender!string();
+        TypeNode keySlot;
+        TypeNode valueSlot;
+        if (expectedNode.present && expectedNode.base == DuendeType.DICT) {
+            if (expectedNode.args.length >= 2) {
+                keySlot = expectedNode.args[0];
+                valueSlot = expectedNode.args[1];
+            } else {
+                keySlot = TypeNode.of(DuendeType.STRING);
+                valueSlot = TypeNode.of(DuendeType.STRING);
+            }
+        }
         if (dict.keys.length == 0) {
-            result ~= "(string[string]).init";
+            string ty = "string[string]";
+            if (expected.length && expected != "auto" && expected != "void") ty = expected;
+            result ~= "(" ~ ty ~ ").init";
         } else {
             result ~= "[";
             foreach (i, key; dict.keys) {
                 if (i > 0) result ~= ", ";
-                result ~= generateExpression(key) ~ ": " ~ generateExpression(dict.values[i]) ~ ".to!string";
+                result ~= emitInSlot(key, keySlot) ~ ": " ~ emitInSlot(dict.values[i], valueSlot);
             }
             result ~= "]";
         }
         return result.data;
+    }
+
+    // A float slot widens an int. Other slots keep the written value's type.
+    private string emitInSlot(Expression expr, TypeNode slot) {
+        if (!slot.present || slot.unknown || (slot.base == DuendeType.AUTO && !slot.inferred))
+            return generateExpression(expr);
+        if (slot.base == DuendeType.FLOAT)
+            return "cast(double)(" ~ generateExpression(expr) ~ ")";
+        return generateWithNode(slot, toDTypeNode(slot), expr);
+    }
+
+    private string generateIndexAssignment(IndexAssignmentExpression indexAssignment) {
+        TypeNode slot;
+        DuendeType collection = DuendeType.VOID;
+        if (auto ve = cast(VariableExpression)indexAssignment.object) {
+            if (auto viPtr = ve.name in variableTypes) {
+                auto node = viPtr.typeNode;
+                collection = node.base;
+                if (node.base == DuendeType.LIST && node.args.length) slot = node.args[0];
+                else if (node.base == DuendeType.DICT && node.args.length >= 2) slot = node.args[1];
+                else if (node.base == DuendeType.DICT) slot = TypeNode.of(DuendeType.STRING);
+            }
+        }
+        string value = slot.present ? emitInSlot(indexAssignment.value, slot) : generateExpression(indexAssignment.value);
+        string objectCode = generateExpression(indexAssignment.object);
+        string indexCode = generateExpression(indexAssignment.index);
+        if (collection == DuendeType.LIST)
+            return "duende_list_put(" ~ objectCode ~ ", " ~ indexCode ~ ", " ~ value ~ ")";
+        if (collection == DuendeType.DICT)
+            return "duende_dict_put(" ~ objectCode ~ ", " ~ indexCode ~ ", " ~ value ~ ")";
+        return objectCode ~ "[" ~ indexCode ~ "] = " ~ value;
     }
 
     /**
@@ -1192,6 +1224,11 @@ mixin template DExpressionsMixin() {
             case "has":
                 if (argsList.length == 1) {
                     return "(" ~ generateExpression(argsList[0]) ~ " in " ~ obj ~ ") !is null";
+                }
+                break;
+            case "get":
+                if (argsList.length == 1) {
+                    return "duende_dict_get(" ~ obj ~ ", " ~ generateExpression(argsList[0]) ~ ")";
                 }
                 break;
             case "items":

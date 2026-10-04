@@ -294,7 +294,7 @@ class TestDuendeExamples:
             "Values length: 3",
             "Empty list length: 0",
             "Empty list empty: true",
-            "Empty list first: -1",
+            "Empty list first: none",
             "Empty dict length: 0",
             "Empty dict empty: true"
         ]
@@ -323,6 +323,58 @@ class TestDuendeExamples:
                 assert lines[i] == expected_line, f"Line {i}: expected '{expected_line}', got '{lines[i]}'"
             else:
                 assert False, f"Missing line {i}: expected '{expected_line}'"
+
+    def test_typed_collections_example(self):
+        """Typed dicts keep values, and missing elements are Maybe rather than -1."""
+        source_file = self.examples_dir / "typed_collections.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        lines = stdout.strip().split('\n')
+        expected = [
+            "2",
+            "3",
+            "2",
+            "one",
+            "2.5",
+            "seven",
+            "8",
+            "8",
+            "2",
+            "9",
+            "9",
+            "5",
+            "5",
+            "6",
+            "1",
+            "6",
+            "15",
+            "2",
+            "one",
+            "three",
+            "absent",
+            "absent",
+            "-1",
+            "-1",
+            "-1",
+            "-1",
+            "8",
+            "-1",
+            "3",
+            "3",
+            "0",
+            "1",
+            "0",
+            "-1",
+            "0",
+            "true",
+            "beta",
+            "gamma",
+            "b",
+            "c",
+            "2",
+        ]
+        assert lines == expected, f"Expected {expected}, got {lines}"
 
     def test_regex_example(self):
         """Test the regex.du example"""

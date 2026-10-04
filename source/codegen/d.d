@@ -28,10 +28,11 @@ class DCodeGenerator : CodeGenerator {
     private string currentFunctionReturnCustomTypeName; // Track custom inner type name when returning generics
     private TypeNode currentFunctionReturnNode; // Nested generic return type, when parsed
     private string currentFunctionReturnDType; // D spelling of the current function return, used as constructor context
-    private struct VarInfo { DuendeType type; string custom; DuendeType inner; string innerCustom; string dType; }
+    private struct VarInfo { DuendeType type; string custom; DuendeType inner; string innerCustom; string dType; TypeNode typeNode; }
     private VarInfo[string] variableTypes; // Track variable types in current function scope
     private VarInfo[string] globalVarTypes; // Module-level names, restored at each function
     private string exprExpectedType; // D type expected of the expression currently being generated
+    private TypeNode exprExpectedNode; // Duende type expected of that expression, when known
     // Optional function/method signature registry to support named-args reordering at call sites
     private Parameter[][string] functionSignatures; // name -> params
     private Parameter[][string] methodSignatures;   // Type.method -> params (future)
@@ -117,18 +118,6 @@ class DCodeGenerator : CodeGenerator {
 
         // Generate imports based on analysis
         generateImports(result);
-
-        // Generate helper functions only if needed
-        if ("std.array" in requiredImports) {
-            result ~= "struct DictEntry { string key; string value; }\n";
-            result ~= "DictEntry[] duende_dict_items(string[string] dict) {\n";
-            result ~= "    DictEntry[] result;\n";
-            result ~= "    foreach (k, v; dict) {\n";
-            result ~= "        result ~= DictEntry(k, v);\n";
-            result ~= "    }\n";
-            result ~= "    return result;\n";
-            result ~= "}\n\n";
-        }
 
         // Generate date/time helpers only if needed
         if ("std.datetime.systime" in requiredImports) {

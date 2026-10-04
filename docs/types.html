@@ -34,7 +34,7 @@
         <li><code>bool</code></li>
         <li><code>bytes</code> — byte array</li>
   <li><code>list&lt;T&gt;</code> — dynamic array (must specify element type)</li>
-        <li><code>dict</code> — associative array</li>
+        <li><code>dict&lt;K, V&gt;</code> — associative array. A bare <code>dict</code> is <code>dict&lt;string, string&gt;</code></li>
         <li><code>auto</code> — inferred type of the initializer</li>
         <li>User-defined: <a href="structs-frames.html">struct</a>, <a href="structs-frames.html">frame</a>, <a href="enums.html">enum</a>, and <a href="protocols.html">protocol</a></li>
       </ul>
@@ -45,7 +45,9 @@ let float b = 3.5
 let string s = "text"
 let list&lt;int&gt; xs = [1, 2, 3]
 let list&lt;list&lt;int&gt;&gt; grid = [[1, 2], [3]]
-let dict d = {"k": 1}
+let dict&lt;string, int&gt; d = {"k": 1}
+let dict&lt;string, string&gt; text = {"k": string(1)}
+let auto inferred = {"k": 1} // dict&lt;string, int&gt;
 let auto n = 42 // inferred as int
 let bool ok = 1 &lt; 2
 </code></pre>
@@ -64,7 +66,7 @@ let bool ok = 1 &lt; 2
       <p>Generic arguments are kept at every level: parameters, returns, fields, and expressions. <code>list&lt;list&lt;int&gt;&gt;</code> is a list of int lists, so indexing once yields <code>list&lt;int&gt;</code> and indexing again yields <code>int</code>. The same rules apply to <code>Result</code> and <code>Maybe</code> payloads such as <code>Result&lt;list&lt;int&gt;&gt;</code>. An empty list literal takes its element type from the declared type: <code>let list&lt;list&lt;int&gt;&gt; rows = []</code>.</p>
 
   <h2>Generics-like containers</h2>
-  <p>Containers use explicit element types, e.g., <code>list&lt;int&gt;</code>, <code>list&lt;string&gt;</code>. Empty list literals require context: <code>let list&lt;string&gt; xs = []</code>. Algebraic results use constructor names (see <a href="result-maybe.html">Result & Maybe</a>).</p>
+  <p>Containers use explicit element types, e.g., <code>list&lt;int&gt;</code>, <code>dict&lt;string, int&gt;</code>. Empty list literals require context: <code>let list&lt;string&gt; xs = []</code>. An empty dictionary uses the declared <code>dict&lt;K, V&gt;</code>. <code>auto</code> infers both arguments from a non-empty literal whose keys share a type and whose values share a type. A bare <code>dict</code> is <code>dict&lt;string, string&gt;</code> and does not convert values to text. Algebraic results use constructor names (see <a href="result-maybe.html">Result & Maybe</a>).</p>
 
       <h2>Result and Maybe</h2>
       <p>These are sum types with constructors <code>Ok</code>/<code>Error</code> and <code>Some</code>/<code>None</code>. The same <code>Result</code> and <code>Maybe</code> types are shared by every module. Constructors copy the wrapper type from the declaration, argument, assignment, or return around them. <code>? else</code> reads the subject once and evaluates its fallback only for <code>Error</code> or <code>None</code>. See <a href="result-maybe.html">Result & Maybe</a>.</p>

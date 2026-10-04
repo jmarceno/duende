@@ -5,9 +5,9 @@ int main() do
     let int first = numbers[0]
     print("First: ${first}")
 
-    var dict config = {"host": "localhost", "port": 8080}
+    var dict<string, int> config = {"port": 8080}
     if config.has("port") do
-        let int port = config["port"] //We validated that this exist, but if it did not, it should just crash for now, we will handle errors later
+        let int port = config["port"] // a missing key aborts; has is the check
         print("Port: ${port}")
     else
         print("No port specified at config")

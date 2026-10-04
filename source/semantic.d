@@ -76,13 +76,41 @@ private TypeNode resolveAuto(TypeNode declared, TypeNode initType) {
 	return inf;
 }
 
+private TypeNode stringDict() {
+	return TypeNode.generic(DuendeType.DICT, [
+		TypeNode.of(DuendeType.STRING),
+		TypeNode.of(DuendeType.STRING)
+	]);
+}
+
 private TypeNode declaredNode(TypeNode node, DuendeType fallback, string custom = null) {
-	if (node.present) return node;
-	return TypeNode.of(fallback, custom);
+	TypeNode t = node.present ? node : TypeNode.of(fallback, custom);
+	// A bare dict is the old string dictionary. It does not stringify new values.
+	if (t.base == DuendeType.DICT && t.args.length < 2) return stringDict();
+	return t;
+}
+
+// Dictionary slots do not accept the general implicit conversion to string.
+private bool elementCompatible(TypeNode need, TypeNode got) {
+	if (isPermissive(need) || isPermissive(got)) return true;
+	if (need.base == DuendeType.FLOAT && got.base == DuendeType.INT && need.args.length == 0) return true;
+	if (need.base != got.base) return false;
+	if (need.base == DuendeType.CUSTOM) {
+		if (need.name.length && got.name.length) return need.name == got.name;
+		return true;
+	}
+	if (need.args.length == 0 || got.args.length == 0) return true;
+	if (need.args.length != got.args.length) return false;
+	foreach (i, arg; need.args) {
+		if (!elementCompatible(arg, got.args[i])) return false;
+	}
+	return true;
 }
 
 private bool typeCompatible(TypeNode need, TypeNode got) {
 	if (isPermissive(need) || isPermissive(got)) return true;
+	if (need.base == DuendeType.DICT && got.base == DuendeType.DICT)
+		return elementCompatible(need, got);
 	if (need.base == got.base) {
 		if (need.base == DuendeType.CUSTOM) {
 			if (need.name.length && got.name.length)
@@ -234,6 +262,7 @@ class SemanticAnalyzer {
 		if (depth > maxDepth) return; // safety
 		if (auto vd = cast(VariableDeclaration)s) {
 			auto ti = declaredNode(vd.typeNode, vd.type, vd.customTypeName);
+			if (ti.base == DuendeType.DICT) vd.typeNode = ti;
 			if (vd.initializer !is null) {
 				TypeNode expect = (ti.base == DuendeType.AUTO) ? TypeNode.init : ti;
 				auto et = visitExpr(vd.initializer, sourcePath, errs, env, depth + 1, expect);
@@ -342,6 +371,11 @@ class SemanticAnalyzer {
 			if (it.base == DuendeType.LIST && it.args.length) {
 				elem = it.args[0];
 				elem.inferred = true;
+			} else if (it.base == DuendeType.DICT && it.args.length >= 2) {
+				elem = it.args[1];
+				elem.inferred = true;
+			} else if (it.base == DuendeType.DICT) {
+				elem = TypeNode.of(DuendeType.STRING);
 			} else if (it.base == DuendeType.STRING) {
 				elem = TypeNode.of(DuendeType.STRING);
 			}
@@ -416,11 +450,62 @@ class SemanticAnalyzer {
 			return typeInfo(DuendeType.LIST);
 		}
 		if (auto dl = cast(DictLiteralExpression)e) {
-			foreach (i, k; dl.keys) {
-				visitExpr(k, sourcePath, errs, env, depth + 1);
-				visitExpr(dl.values[i], sourcePath, errs, env, depth + 1);
+			TypeNode keyExpect;
+			TypeNode valExpect;
+			bool check = expected.present && expected.base == DuendeType.DICT;
+			if (check) {
+				if (expected.args.length >= 2) {
+					keyExpect = expected.args[0];
+					valExpect = expected.args[1];
+				} else {
+					keyExpect = TypeNode.of(DuendeType.STRING);
+					valExpect = TypeNode.of(DuendeType.STRING);
+				}
 			}
-			return typeInfo(DuendeType.DICT);
+			if (dl.keys.length == 0) {
+				if (check) return expected.args.length >= 2 ? expected : stringDict();
+				errs.addError("Empty dictionary needs a dict<K, V> type", getExprPos(dl, sourcePath));
+				return TypeNode.unknownType();
+			}
+			TypeNode seenKey;
+			TypeNode seenVal;
+			bool haveKey = false;
+			bool haveVal = false;
+			bool concrete = true;
+			foreach (i, k; dl.keys) {
+				auto kt = visitExpr(k, sourcePath, errs, env, depth + 1, check ? keyExpect : TypeNode.init);
+				auto vt = visitExpr(dl.values[i], sourcePath, errs, env, depth + 1, check ? valExpect : TypeNode.init);
+				if (check && !elementCompatible(keyExpect, kt)) {
+					errs.addError(
+						"Dictionary key type does not match (need=" ~ typeInfoToString(keyExpect) ~ ", got=" ~ typeInfoToString(kt) ~ ")",
+						getExprPos(k, sourcePath));
+				}
+				if (check && !elementCompatible(valExpect, vt)) {
+					errs.addError(
+						"Dictionary value type does not match (need=" ~ typeInfoToString(valExpect) ~ ", got=" ~ typeInfoToString(vt) ~ ")",
+						getExprPos(dl.values[i], sourcePath));
+				}
+				if (isPermissive(kt) || isPermissive(vt)) concrete = false;
+				if (!isPermissive(kt)) {
+					if (!haveKey) {
+						seenKey = kt;
+						haveKey = true;
+					} else if (!elementCompatible(seenKey, kt) && !elementCompatible(kt, seenKey)) {
+						errs.addError("Dictionary keys have inconsistent types", getExprPos(k, sourcePath));
+					}
+				}
+				if (!isPermissive(vt)) {
+					if (!haveVal) {
+						seenVal = vt;
+						haveVal = true;
+					} else if (!elementCompatible(seenVal, vt) && !elementCompatible(vt, seenVal)) {
+						errs.addError("Dictionary values have inconsistent types", getExprPos(dl.values[i], sourcePath));
+					}
+				}
+			}
+			if (check) return expected.args.length >= 2 ? expected : stringDict();
+			if (concrete && haveKey && haveVal) return TypeNode.generic(DuendeType.DICT, [seenKey, seenVal]);
+			return TypeNode.unknownType();
 		}
 		if (auto ve = cast(VariableExpression)e) {
 			// Treat known enum names as type-like values (for qualified access Color.Red)
@@ -490,7 +575,29 @@ class SemanticAnalyzer {
 			if (!skipObject) {
 				ot = visitExpr(me.object, sourcePath, errs, env, depth + 1);
 			}
-			foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+			bool checkedArg = false;
+			if (me.method == "add" && ot.base == DuendeType.LIST && ot.args.length && me.arguments.length >= 1) {
+				auto at = visitExpr(me.arguments[0], sourcePath, errs, env, depth + 1, ot.args[0]);
+				if (!elementCompatible(ot.args[0], at)) {
+					errs.addError(
+						"List element type does not match (need=" ~ typeInfoToString(ot.args[0]) ~ ", got=" ~ typeInfoToString(at) ~ ")",
+						getExprPos(me.arguments[0], sourcePath));
+				}
+				checkedArg = true;
+			} else if ((me.method == "get" || me.method == "has") && ot.base == DuendeType.DICT && me.arguments.length >= 1) {
+				TypeNode keyNeed = ot.args.length ? ot.args[0] : typeInfo(DuendeType.STRING);
+				auto kt = visitExpr(me.arguments[0], sourcePath, errs, env, depth + 1, keyNeed);
+				if (!elementCompatible(keyNeed, kt)) {
+					errs.addError(
+						"Dictionary key type does not match (need=" ~ typeInfoToString(keyNeed) ~ ", got=" ~ typeInfoToString(kt) ~ ")",
+						getExprPos(me.arguments[0], sourcePath));
+				}
+				checkedArg = true;
+			}
+			foreach (i, a; me.arguments) {
+				if (checkedArg && i == 0) continue;
+				visitExpr(a, sourcePath, errs, env, depth + 1);
+			}
 			if (ot.base == DuendeType.CUSTOM && ot.name.length) {
 				if (auto agg = ot.name in aggregates) {
 					if (agg.isFrame && (me.method in agg.mutatingMethods) && receiverIsLet(me.object, env)) {
@@ -501,6 +608,12 @@ class SemanticAnalyzer {
 					}
 				}
 			}
+			if (me.method == "get" && ot.base == DuendeType.DICT) {
+				TypeNode valT = ot.args.length >= 2 ? ot.args[1] : typeInfo(DuendeType.STRING);
+				return TypeNode.generic(DuendeType.MAYBE, [valT]);
+			}
+			if (me.method == "has" && ot.base == DuendeType.DICT) return typeInfo(DuendeType.BOOL);
+			if (me.method == "slice" && ot.base == DuendeType.LIST) return ot;
 			return TypeNode.unknownType();
 		}
 		if (auto be = cast(BinaryExpression)e) {
@@ -530,10 +643,51 @@ class SemanticAnalyzer {
 		}
 		if (auto ie = cast(IndexExpression)e) {
 			auto ot = visitExpr(ie.object, sourcePath, errs, env, depth + 1);
-			visitExpr(ie.index, sourcePath, errs, env, depth + 1, typeInfo(DuendeType.INT));
+			TypeNode indexExpect = typeInfo(DuendeType.INT);
+			if (ot.base == DuendeType.DICT)
+				indexExpect = ot.args.length ? ot.args[0] : typeInfo(DuendeType.STRING);
+			auto it = visitExpr(ie.index, sourcePath, errs, env, depth + 1, indexExpect);
+			if (ot.base == DuendeType.LIST || ot.base == DuendeType.STRING) {
+				if (!elementCompatible(typeInfo(DuendeType.INT), it))
+					errs.addError("Index must be int", getExprPos(ie.index, sourcePath));
+			} else if (ot.base == DuendeType.DICT) {
+				if (!elementCompatible(indexExpect, it)) {
+					errs.addError(
+						"Dictionary key type does not match (need=" ~ typeInfoToString(indexExpect) ~ ", got=" ~ typeInfoToString(it) ~ ")",
+						getExprPos(ie.index, sourcePath));
+				}
+			}
 			if (ot.base == DuendeType.LIST && ot.args.length) return ot.args[0];
 			if (ot.base == DuendeType.DICT && ot.args.length >= 2) return ot.args[1];
+			if (ot.base == DuendeType.DICT) return typeInfo(DuendeType.STRING);
 			if (ot.base == DuendeType.STRING) return typeInfo(DuendeType.STRING);
+			return TypeNode.unknownType();
+		}
+		if (auto ia = cast(IndexAssignmentExpression)e) {
+			auto ot = visitExpr(ia.object, sourcePath, errs, env, depth + 1);
+			TypeNode keyExpect = typeInfo(DuendeType.INT);
+			TypeNode valExpect;
+			if (ot.base == DuendeType.DICT) {
+				keyExpect = ot.args.length ? ot.args[0] : typeInfo(DuendeType.STRING);
+				valExpect = ot.args.length >= 2 ? ot.args[1] : typeInfo(DuendeType.STRING);
+			} else if (ot.base == DuendeType.LIST && ot.args.length) {
+				valExpect = ot.args[0];
+			} else if (ot.base == DuendeType.STRING) {
+				errs.addError("Cannot assign through a string index", getExprPos(ia, sourcePath));
+			}
+			auto kt = visitExpr(ia.index, sourcePath, errs, env, depth + 1, keyExpect);
+			if ((ot.base == DuendeType.LIST || ot.base == DuendeType.DICT) && !elementCompatible(keyExpect, kt)) {
+				errs.addError(
+					"Index type does not match (need=" ~ typeInfoToString(keyExpect) ~ ", got=" ~ typeInfoToString(kt) ~ ")",
+					getExprPos(ia.index, sourcePath));
+			}
+			auto vt = visitExpr(ia.value, sourcePath, errs, env, depth + 1, valExpect);
+			if (valExpect.present && !elementCompatible(valExpect, vt)) {
+				errs.addError(
+					"Assigned element type does not match (need=" ~ typeInfoToString(valExpect) ~ ", got=" ~ typeInfoToString(vt) ~ ")",
+					getExprPos(ia.value, sourcePath));
+			}
+			if (valExpect.present) return valExpect;
 			return TypeNode.unknownType();
 		}
 		if (auto pe = cast(PropertyExpression)e) {
@@ -561,6 +715,20 @@ class SemanticAnalyzer {
 				if (auto agg = ot.name in aggregates) {
 					if (auto ft = pe.property in agg.fields) return ft.type;
 				}
+			}
+			if (ot.base == DuendeType.LIST) {
+				if (pe.property == "length") return typeInfo(DuendeType.INT);
+				if (pe.property == "empty") return typeInfo(DuendeType.BOOL);
+				if ((pe.property == "first" || pe.property == "last") && ot.args.length)
+					return TypeNode.generic(DuendeType.MAYBE, [ot.args[0]]);
+			}
+			if (ot.base == DuendeType.DICT) {
+				if (pe.property == "length") return typeInfo(DuendeType.INT);
+				if (pe.property == "empty") return typeInfo(DuendeType.BOOL);
+				TypeNode keyT = ot.args.length ? ot.args[0] : typeInfo(DuendeType.STRING);
+				TypeNode valT = ot.args.length >= 2 ? ot.args[1] : typeInfo(DuendeType.STRING);
+				if (pe.property == "keys") return TypeNode.generic(DuendeType.LIST, [keyT]);
+				if (pe.property == "values") return TypeNode.generic(DuendeType.LIST, [valT]);
 			}
 			return TypeNode.unknownType();
 		}
@@ -652,6 +820,7 @@ class SemanticAnalyzer {
 		if (auto n = cast(IndexExpression)e) return normalizePos(n.position, file);
 		if (auto n = cast(PropertyExpression)e) return normalizePos(n.position, file);
 		if (auto n = cast(PropertyAssignmentExpression)e) return normalizePos(n.position, file);
+		if (auto n = cast(IndexAssignmentExpression)e) return normalizePos(n.position, file);
 		if (auto n = cast(BytesLiteralExpression)e) return normalizePos(n.position, file);
 		if (auto n = cast(ListLiteralExpression)e) return normalizePos(n.position, file);
 		if (auto n = cast(DictLiteralExpression)e) return normalizePos(n.position, file);
@@ -807,6 +976,9 @@ class SemanticAnalyzer {
 				if (ve.name == "this") return true;
 			}
 			return exprWritesThis(pa.object, mut) || exprWritesThis(pa.value, mut);
+		}
+		if (auto ia = cast(IndexAssignmentExpression)e) {
+			return exprWritesThis(ia.object, mut) || exprWritesThis(ia.index, mut) || exprWritesThis(ia.value, mut);
 		}
 		if (auto mc = cast(MethodCallExpression)e) {
 			if (mut !is null) {

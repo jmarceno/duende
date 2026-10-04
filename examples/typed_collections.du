@@ -1,0 +1,107 @@
+frame qty() do
+    let int n = 0
+end
+
+struct label() do
+    let string name = ""
+end
+
+dict<string, int> seed() do
+    return {"a": 4}
+end
+
+int main() do
+    let dict<string, int> counts = {"a": 1, "b": 2}
+    let dict<string, string> labels = {"a": "one", "b": string(2)}
+    let dict<string, float> meters = {"span": 2}
+    let dict<int, string> byId = {7: "seven", 8: "eight"}
+    let auto inferred = {"n": 7}
+    let dict<string, list<int>> groups = {"a": [1, 2]}
+    let dict<string, qty> stock = {"apple": qty(2)}
+
+    counts["c"] = 3
+    labels["c"] = "three"
+    groups["b"] = [9]
+    stock["pear"] = qty(5)
+    stock["apple"] = qty(9)
+
+    var dict<string, int> bag = {"a": 1}
+    bag = {"b": 6}
+
+    print(counts["a"] + 1)
+    print(counts["c"])
+    print(labels["b"])
+    print(labels["a"])
+    print(meters["span"] + 0.5)
+    print(byId[7])
+    print(inferred["n"] + 1)
+    for n in inferred do
+        print(n + 1)
+    end
+    print(groups["a"][1])
+    print(groups["b"][0])
+    print(stock["apple"].n)
+    print(stock["pear"].n)
+    print(seed()["a"] + 1)
+    print(bag["b"])
+    print(bag.length)
+
+    var int sum = 0
+    for entry in counts.items() do
+        sum = sum + entry.value
+    end
+    print(sum)
+
+    var int keySum = 0
+    for k in byId.keys do
+        keySum = keySum + k
+    end
+    print(keySum)
+
+    let list<string> labelValues = labels.values
+    labelValues.sort()
+    for v in labelValues do
+        print(v)
+    end
+
+    let list<int> emptyInts = []
+    let list<int> onlyNeg = [-1]
+    let list<string> negText = ["-1"]
+    let list<int> nums = [1, -1]
+    nums[0] = 8
+    nums.add(3)
+
+    print(emptyInts.first ? else "absent")
+    print(emptyInts.last ? else "absent")
+    print(onlyNeg.first ? else 0)
+    print(onlyNeg.last ? else 0)
+    print(negText.first ? else "absent")
+    print(negText.last ? else "absent")
+    print(nums[0])
+    print(nums[1])
+    print(nums[2])
+    print(nums.length)
+
+    print(counts.get("missing") ? else 0)
+    print(counts.get("a") ? else 0)
+    let dict<string, int> zeros = {"z": 0}
+    print(zeros.get("z") ? else -1)
+    print(zeros.get("no") ? else -1)
+
+    let dict emptyNamed = {}
+    print(emptyNamed.length)
+    print(emptyNamed.empty)
+
+    let dict<string, label> tags = {"a": label("alpha")}
+    tags["a"] = label("beta")
+    tags["b"] = label("gamma")
+    print(tags["a"].name)
+    print(tags["b"].name)
+
+    let list<label> titles = [label("a")]
+    titles[0] = label("b")
+    titles.add(label("c"))
+    print(titles[0].name)
+    print(titles[1].name)
+    print(titles.length)
+end

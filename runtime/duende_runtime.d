@@ -53,6 +53,58 @@ struct Maybe(T) {
     @property inout(T) value() inout { return _value; }
 }
 
+// One entry from dict.items(). key and value keep the dictionary's types.
+struct DictEntry(K, V) {
+    K key;
+    V value;
+}
+
+DictEntry!(K, V)[] duende_dict_items(K, V)(V[K] dict) {
+    DictEntry!(K, V)[] result;
+    foreach (k, v; dict) {
+        result ~= DictEntry!(K, V)(k, v);
+    }
+    return result;
+}
+
+// Missing list elements are None. A stored value, including -1, is Some.
+Maybe!(T) duende_list_first(T)(T[] xs) {
+    if (xs.length == 0) return Maybe!(T).none();
+    return Maybe!(T).some(xs[0]);
+}
+
+Maybe!(T) duende_list_last(T)(T[] xs) {
+    if (xs.length == 0) return Maybe!(T).none();
+    return Maybe!(T).some(xs[$-1]);
+}
+
+// A missing dictionary key is None. Indexing that key still aborts.
+Maybe!(V) duende_dict_get(K, V)(V[K] dict, K key) {
+    auto found = key in dict;
+    if (found is null) return Maybe!(V).none();
+    return Maybe!(V).some(*found);
+}
+
+// Replace one list element. Structs with let fields have no assignment, so those move into the slot.
+void duende_list_put(T)(T[] xs, long index, T value) {
+    static if (__traits(compiles, { T[] sample = [T.init]; sample[0] = T.init; })) {
+        xs[cast(size_t)index] = value;
+    } else {
+        import core.lifetime : moveEmplace;
+        moveEmplace(value, xs[cast(size_t)index]);
+    }
+}
+
+// Insert or replace one dictionary entry, including structs with let fields.
+void duende_dict_put(K, V)(V[K] dict, K key, V value) {
+    static if (__traits(compiles, { V[K] sample; sample[K.init] = V.init; })) {
+        dict[key] = value;
+    } else {
+        dict.remove(key);
+        update(dict, key, delegate V() { return value; }, delegate void(ref V slot) {});
+    }
+}
+
 // `subject ? else fallback`
 // The expression type is the type of the fallback.
 // A successful payload is converted to that type with std.conv.to.

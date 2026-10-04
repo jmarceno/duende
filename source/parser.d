@@ -404,6 +404,8 @@ class Parser {
                 return new AssignmentExpression(var.name, value);
             } else if (auto prop = cast(PropertyExpression)expr) {
                 return new PropertyAssignmentExpression(prop.object, prop.property, value);
+            } else if (auto idx = cast(IndexExpression)expr) {
+                return new IndexAssignmentExpression(idx.object, idx.index, value);
             }
             throw new ParseError("Invalid assignment target");
         }
@@ -1234,6 +1236,13 @@ class Parser {
         }
         if (match(TokenType.DICT_TYPE)) {
             node.base = DuendeType.DICT;
+            if (match(TokenType.LESS)) {
+                TypeNode keyType = parseTypeNode();
+                consume(TokenType.COMMA, "Expected ',' between dictionary key and value types");
+                TypeNode valueType = parseTypeNode();
+                node.args = [keyType, valueType];
+                consume(TokenType.GREATER, "Expected '>' after dictionary types");
+            }
             lastTypeNode = node;
             return node;
         }

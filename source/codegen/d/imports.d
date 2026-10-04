@@ -190,6 +190,11 @@ mixin template DImportsMixin() {
         } else if (auto propAssignment = cast(PropertyAssignmentExpression)expr) {
             analyzeExpressionImports(propAssignment.object);
             analyzeExpressionImports(propAssignment.value);
+        } else if (auto indexAssignment = cast(IndexAssignmentExpression)expr) {
+            analyzeExpressionImports(indexAssignment.object);
+            analyzeExpressionImports(indexAssignment.index);
+            analyzeExpressionImports(indexAssignment.value);
+            requiredImports["std.conv"] = true;
         } else if (auto interpolation = cast(StringInterpolationExpression)expr) {
             requiredImports["std.format"] = true;
             foreach (subExpr; interpolation.expressions) {
