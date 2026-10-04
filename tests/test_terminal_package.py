@@ -11,10 +11,11 @@ def compile_and_run(source_file: Path):
     build_dir = source_file.parent / "duende_build"
     exe = build_dir / source_file.stem
     run = subprocess.run([str(exe)], cwd=ROOT, capture_output=True, text=True)
-    return run.stdout.strip()
+    assert run.returncode == 0, f"program failed: {run.stderr}"
+    return run.stdout
 
 
-def test_terminal_package_simple():
+def test_terminal_package_simple(require_dub):
+    require_dub({"arsd-official:terminal": "==12.0.0"})
     src = ROOT / "examples" / "terminal_demo.du"
-    out = compile_and_run(src).strip()
-    assert out == "Terminal module available"
+    assert compile_and_run(src) == "Terminal module available\n"

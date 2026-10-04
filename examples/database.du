@@ -44,6 +44,8 @@ int main() do
   dbBindInt(ins2, 3, 99)
   dbExecPrepared(ins2)
   dbCloseStmt(ins2)
+  // Inside the transaction the new row is visible
+  print(dbQueryScalar(db, "SELECT COUNT(*) FROM users"))
   dbRollback(db)
 
   // Verify count unchanged
@@ -54,11 +56,13 @@ int main() do
   dbExecute(db, "UPDATE users SET age = age + 1 WHERE id = 2")
   // Query all and print a couple of fields to assert correctness
   var auto rows = dbQueryAll(db, "SELECT name, age FROM users ORDER BY id")
-  // Expecting 3 rows; print "name:age" for first and last
-  var string first = "${rows[0][0]}:${rows[0][1]}"
-  var string last = "${rows[2][0]}:${rows[2][1]}"
-  print(first)
-  print(last)
+  // Expecting 3 rows in id order; Bob's age went from 25 to 26
+  print(rows.length)
+  for row in rows do
+    print("${row[0]}:${row[1]}")
+  end
+  // The rolled-back row never made it in
+  print(dbQueryScalar(db, "SELECT COUNT(*) FROM users WHERE name = 'Temp'"))
 
   dbClose(db)
   return 0

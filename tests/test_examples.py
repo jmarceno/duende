@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import subprocess
 import tempfile
 import pytest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -18,7 +20,7 @@ class TestDuendeExamples:
         if not cls.compiler_path.exists():
             subprocess.run(["dub", "build"], cwd=cls.project_root, check=True)
 
-    def compile_and_run(self, source_file, input_data=None):
+    def compile_and_run(self, source_file, input_data=None, env=None, cwd=None):
         """Compile a Duende source file and run the resulting executable"""
 
         result = subprocess.run(
@@ -29,7 +31,7 @@ class TestDuendeExamples:
         )
 
         if result.returncode != 0:
-            raise Exception(f"Compilation failed: {result.stderr}")
+            raise Exception(f"Compilation failed:\n{result.stderr}\n{result.stdout}")
 
         build_dir = source_file.parent / "duende_build"
         executable = build_dir / source_file.stem
@@ -41,7 +43,9 @@ class TestDuendeExamples:
             [str(executable)],
             input=input_data,
             capture_output=True,
-            text=True
+            text=True,
+            env=env,
+            cwd=cwd,
         )
 
         return run_result.stdout, run_result.stderr, run_result.returncode
@@ -719,72 +723,86 @@ class TestDuendeExamples:
             else:
                 assert False, f"Missing line {i}: expected '{expected_line}'"
 
-    def test_dates_and_times_example(self):
-        """Test the dates_and_times.du example"""
+    # Fixed POSIX zones so the output never depends on the host's time zone or tz database.
+    @pytest.mark.parametrize("tz, offset_hours, brt, ist, meetup_utc", [
+        ("UTC0", 0, "2025-05-20 15:30:00-03:00", "2025-05-21 00:00:00+05:30", "2025-05-20 18:30:00"),
+        ("<-03>3", -3, "2025-05-20 18:30:00-03:00", "2025-05-21 03:00:00+05:30", "2025-05-20 21:30:00"),
+    ])
+    def test_dates_and_times_example(self, tz, offset_hours, brt, ist, meetup_utc):
+        """Dates are built in local time; toTZ keeps the instant and only changes the offset shown"""
         source_file = self.examples_dir / "dates_and_times.du"
+        env = {**os.environ, "TZ": tz}
+        local_zone = timezone(timedelta(hours=offset_hours))
+        before_local = datetime.now(local_zone).date()
+        before_utc = datetime.now(timezone.utc)
+        stdout, stderr, returncode = self.compile_and_run(source_file, env=env)
+        after_local = datetime.now(local_zone).date()
+        after_utc = datetime.now(timezone.utc)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        lines = stdout.splitlines()
+
+        # now() and utcNow() are the only moving parts: check their shape and that they fall in the run window
+        today = re.fullmatch(r"Today: (\d{4}-\d{2}-\d{2})", lines[0])
+        assert today, lines[0]
+        assert today.group(1) in {before_local.isoformat(), after_local.isoformat()}
+        utc = re.fullmatch(r"UTC: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})Z", lines[1])
+        assert utc, lines[1]
+        printed_utc = datetime.strptime(utc.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        assert before_utc.replace(microsecond=0) <= printed_utc <= after_utc
+
+        assert lines[2:] == [
+            "1990-07-06",
+            "2025-05-20 18:30:00",
+            brt,                      # toTZ(meetup, -3)
+            ist,                      # toTZ(meetup, 5, 30)
+            meetup_utc,               # toUTC(toTZ(meetup, -3)) ...
+            meetup_utc,               # ... is the same instant as toUTC(meetup)
+            "1990", "7", "6", "18", "30", "0",
+            "true",
+            "1990-07-08",
+            "2025-05-20 23:30:00",    # + 5 hours
+            "2025-05-20 20:00:00",    # + 90 minutes
+            "2025-05-20 19:31:01",    # + 3661 seconds
+            "2025-12-31 23:59:59",    # parseDate
+            "NewYearEveEve",
+        ]
+
+    def test_hashing_digest_example(self):
+        """Test the hashing_digest.du example"""
+        source_file = self.examples_dir / "hashing_digest.du"
         stdout, stderr, returncode = self.compile_and_run(source_file)
 
         assert returncode == 0, f"Program failed: {stderr}"
-        lines = stdout.strip().split('\n')
+        lines = [ln for ln in stdout.strip().split('\n') if ln.strip()]
 
-        # We can't assert dynamic 'today' and 'utc' fully, but we can assert fixed parts count and known constants
-        assert lines[2] == "1990-07-06"
-        assert lines[3] == "2025-05-20 18:30:00"
-        # timezone line 4 ends with offset; for -03:00 offset on a naive UTC-like time we expect 21:30:00-03:00
-        assert lines[4].startswith("2025-05-20 21:30:00")
-        # Field extraction
-        assert lines[5] == "1990"
-        assert lines[6] == "7"
-        assert lines[7] == "6"
-        assert lines[8] == "18"
-        assert lines[9] == "30"
-        assert lines[10] == "0"
-        # Comparison and arithmetic
-        assert lines[11] == "true"
-        assert lines[12] == "1990-07-08"
-        # Additional arithmetic helpers
-        assert lines[13] == "2025-05-20 23:30:00"  # meetup + 5 hours (18:30 -> 23:30)
-        assert lines[14] == "2025-05-20 20:00:00"  # meetup + 90 minutes (18:30 -> 20:00)
-        assert lines[15] == "2025-05-20 19:31:01"  # meetup + 3661 seconds (18:30:00 -> 19:31:01)
-        # Parsing
-        assert lines[16] == "2025-12-31 23:59:59"
-        # Match
-        assert lines[17] == "NewYearEveEve"
+        i = 0
+        # Hex digests for "abc"
+        assert lines[i] == "900150983cd24fb0d6963f7d28e17f72"; i += 1  # md5
+        assert lines[i] == "a9993e364706816aba3e25717850c26c9cd0d89d"; i += 1  # sha1
+        assert lines[i] == "23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"; i += 1  # sha224
+        assert lines[i] == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"; i += 1  # sha256
+        assert lines[i] == "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"; i += 1  # sha384
+        assert lines[i] == "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"; i += 1  # sha512
+        assert lines[i] == "4634270f707b6a54daae7530460842e20e37ed265ceee9a43e8924aa"; i += 1  # sha512/224
+        assert lines[i] == "53048e2681941ef99b2e29b76b4c7dabe4c2d0c634fc6d46e0e2f13107e7af23"; i += 1  # sha512/256
 
-        def test_hashing_digest_example(self):
-            """Test the hashing_digest.du example"""
-            source_file = self.examples_dir / "hashing_digest.du"
-            stdout, stderr, returncode = self.compile_and_run(source_file)
+        # CRCs for "abc" (decimal)
+        assert lines[i] == "891568578"; i += 1  # crc32
+        assert lines[i] == "7372421403230734421"; i += 1  # crc64 ECMA
 
-            assert returncode == 0, f"Program failed: {stderr}"
-            lines = [ln for ln in stdout.strip().split('\n') if ln.strip()]
+        # MurmurHash3 for "abc"
+        assert lines[i] == "3017643002"; i += 1  # seed 0 (0xB3DD93FA)
+        assert lines[i] == "1313807976"; i += 1  # seed 42 (0x4E4F1E68)
 
-            i = 0
-            # Hex digests for "abc"
-            assert lines[i] == "900150983cd24fb0d6963f7d28e17f72"; i += 1  # md5
-            assert lines[i] == "a9993e364706816aba3e25717850c26c9cd0d89d"; i += 1  # sha1
-            assert lines[i] == "23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"; i += 1  # sha224
-            assert lines[i] == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"; i += 1  # sha256
-            assert lines[i] == "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"; i += 1  # sha384
-            assert lines[i] == "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"; i += 1  # sha512
-            assert lines[i] == "4634270f707b6a54daae7530460842e20e37ed265ceee9a43e8924aa"; i += 1  # sha512/224
-            assert lines[i] == "53048e2681941ef99b2e29b76b4c7dabe4c2d0c634fc6d46e0e2f13107e7af23"; i += 1  # sha512/256
+        # For long text 'fox'
+        assert lines[i] == "9e107d9d372bb6826bd81d3542a419d6"; i += 1  # md5
+        assert lines[i] == "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"; i += 1  # sha256
+        assert lines[i] == "1095738169"; i += 1  # crc32
+        assert lines[i] == "4746884454959122491"; i += 1  # crc64 ECMA
+        assert lines[i] == "776992547"; i += 1  # Murmur seed 0
+        assert lines[i] == "880582914"; i += 1  # Murmur seed 42
 
-            # CRCs for "abc" (decimal)
-            assert lines[i] == "891568578"; i += 1  # crc32
-            assert lines[i] == "7372421403230734421"; i += 1  # crc64 ECMA
-
-            # MurmurHash3 for "abc"
-            assert lines[i] == "3017643002"; i += 1  # seed 0 (0xB3DD93FA)
-            assert lines[i] == "1313807976"; i += 1  # seed 42 (0x4E4F1E68)
-
-            # For long text 'fox'
-            assert lines[i] == "9e107d9d372bb6826bd81d3542a419d6"; i += 1  # md5
-            assert lines[i] == "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"; i += 1  # sha256
-            assert lines[i] == "1095738169"; i += 1  # crc32
-            assert lines[i] == "4746884454959122491"; i += 1  # crc64 ECMA
-            assert lines[i] == "776992547"; i += 1  # Murmur seed 0
-            assert lines[i] == "880582914"; i += 1  # Murmur seed 42
     def test_imports_example(self):
         """Test the imports.du example (module system)"""
         source_file = self.examples_dir / "imports.du"
@@ -974,24 +992,33 @@ class TestDuendeExamples:
         assert lines2[2] == "Hello Alice"
         assert lines2[3] == "Sum=5"
 
-    def test_std_xml_example(self):
-        """Test the std_xml.du example (XML parsing/generation)"""
+    def test_std_xml_example(self, require_dub):
+        """std.xml parses, queries, edits attributes and writes XML back out"""
+        require_dub({"dxml": "~>0.4.5"})
         source_file = self.examples_dir / "std_xml.du"
         stdout, stderr, returncode = self.compile_and_run(source_file)
 
         assert returncode == 0, f"Program failed: {stderr}"
-        lines = [ln for ln in stdout.strip().split('\n') if ln.strip()]
-        i = 0
-        assert lines[i] == "catalog"; i += 1
-        assert lines[i] == "2"; i += 1
-        assert lines[i] == "b1"; i += 1
-        assert lines[i] == "Duende Guide"; i += 1
-        # Compact XML: attribute order is sorted by key for determinism
-        # Expect catalog with two book children; we won't assert entire XML string, just that it starts/ends correctly
-        assert lines[i].startswith("<catalog>"); i += 1
-        # Pretty list XML
-        assert lines[i].startswith("<list>"); i += 1
-
+        assert stdout.splitlines() == [
+            "catalog",
+            "2",
+            "b1",
+            "Duende Guide",
+            # setAttr added lang="en" after the existing id
+            '<catalog><book id="b1" lang="en"><title>Duende Guide</title><author>Jane</author></book>'
+            '<book id="b2"><title>XML 101</title><author>John</author></book></catalog>',
+            "<list>",
+            "    <li>",
+            "        one",
+            "    </li>",
+            "    <li>",
+            "        two",
+            "    </li>",
+            "    <li>",
+            "        three",
+            "    </li>",
+            "</list>",
+        ]
     def test_std_encoding_example(self):
         """Test the std_encoding.du example (encoding helpers)"""
         source_file = self.examples_dir / "std_encoding.du"
@@ -1017,71 +1044,77 @@ class TestDuendeExamples:
         assert lines[i] == "4f4b"; i += 1
         assert lines[i] == "OK"; i += 1
 
-    def test_database_example(self):
-        """Test the database.du example (SQLite via ddbc)"""
+    def test_database_example(self, require_dub):
+        """std.database over in-memory SQLite: prepared inserts, rollback, update, ordered query"""
+        require_dub({"ddbc": "==0.7.0"}, {"ddbc": "SQLite"})
         source_file = self.examples_dir / "database.du"
         stdout, stderr, returncode = self.compile_and_run(source_file)
 
         assert returncode == 0, f"Program failed: {stderr}"
-        lines = [ln for ln in stdout.strip().split('\n') if ln.strip()]
-        # Expected prints from the example
-        # count before tx: 3
-        # count after rollback: 3
-        # first row name:age -> Alice:30
-        # last row name:age -> Carol:27
-        # Note: we updated Bob's age to 26 -> after +1 becomes 26 => Bob:26 middle row (not asserted)
-        assert len(lines) >= 4
-        i = 0
-        assert lines[i] == "3"; i += 1
-        assert lines[i] == "3"; i += 1
-        assert lines[i] == "Alice:30"; i += 1
-        assert lines[i] == "Carol:27"; i += 1
-
-    def test_vibe_demo_example(self):
-        """Test the vibe_demo.du example"""
+        assert stdout.splitlines() == [
+            "3",          # three prepared inserts
+            "4",          # the row inserted inside the transaction is visible there
+            "3",          # and gone after rollback
+            "3",          # rows returned by the ordered query
+            "Alice:30",
+            "Bob:26",     # UPDATE age = age + 1
+            "Carol:27",
+            "0",          # no trace of the rolled-back row
+        ]
+    def test_vibe_demo_example(self, require_dub, tmp_path):
+        """vibe.d provider: logging, TLS contexts, timers, HTTP client, async file I/O"""
+        require_dub({"vibe-d": "==0.10.0"}, {"vibe-stream": "tls-openssl"})
         source_file = self.examples_dir / "vibe_demo.du"
-        stdout, stderr, returncode = self.compile_and_run(source_file)
+        # The demo writes test_output.txt and test_dir/ into its working directory
+        stdout, stderr, returncode = self.compile_and_run(source_file, cwd=tmp_path)
 
         assert returncode == 0, f"Program failed: {stderr}"
-        lines = [ln for ln in stdout.strip().split('\n') if ln.strip()]
-        
-        # Check that actual functionality outputs are present
-        expected_outputs = [
+        lines = stdout.splitlines()
+        tls = [ln for ln in lines if ln.startswith("TLS context created:")]
+        assert len(tls) == 2, lines
+        assert re.fullmatch(r"TLS context created: tls_client_\d+ \(client\)", tls[0]), tls[0]
+        assert re.fullmatch(r"TLS context created: tls_server_\d+ \(server\)", tls[1]), tls[1]
+        assert lines == [
             "=== Duende Vibe.d Integration Demo ===",
+            "",
             "--- Logging System ---",
             "Logger created: DuendeApp (level: 2)",
+            "Application starting up",  # vibe.d's own logger prints info to stdout
             "INFO: Application starting up",
             "WARN: This is a warning message",
             "DEBUG: Debug information",
+            "",
             "--- TLS/SSL Context ---",
-            "TLS context created:",
+            tls[0],
+            tls[1],
+            "",
             "--- Timer Operations ---",
-            "Timer created:",
-            "Timeout set:",
+            "Timer created: timer_0 (1000ms, repeat: false)",
+            "Timeout set: timeout_1 (500ms)",
+            "",
             "--- HTTP Client Operations ---",
-            "HTTP client created",
+            "HTTP client created with base URL: http://localhost:8080",
+            "",
             "--- File System Operations ---",
-            "File written async:",
-            "File read async:",
-            # Directory can either be created or already exist
+            "File written async: test_output.txt (25 bytes)",
+            "File read async: test_output.txt (25 bytes)",
+            "Directory created async: test_dir",
+            "Write ok: true",
+            "Read back: Hello from Duende vibe.d!",
+            "Directory ok: true",
+            "",
             "--- Integration Test Complete ---",
             "vibe.d components tested successfully:",
             "✓ Logging system",
-            "✓ TLS/SSL context management", 
+            "✓ TLS/SSL context management",
             "✓ Timer operations",
             "✓ HTTP client creation",
             "✓ File system operations",
-            "Vibe.d integration demo completed successfully!"
+            "",
+            "Vibe.d integration demo completed successfully!",
         ]
-        
-        output_text = '\n'.join(lines)
-        for expected in expected_outputs:
-            assert expected in output_text, f"Expected output '{expected}' not found in output"
-        
-        # Check that directory operation happened (either created or already exists)
-        assert ("Directory created async:" in output_text or "Directory already exists:" in output_text), \
-            "No directory operation output found"
-
+        assert (tmp_path / "test_output.txt").read_text() == "Hello from Duende vibe.d!"
+        assert (tmp_path / "test_dir").is_dir()
     def test_mutability_example(self):
         """let freezes the name; var rebinds; lists and frames follow that split"""
         source_file = self.examples_dir / "mutability.du"

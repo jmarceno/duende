@@ -14,6 +14,3 @@ echo ""
 echo "Running integration tests with pytest..."
 uv run pytest -v -n 1 || exit 1 # -n is set to 1 to avoid concurrency issues
 echo ""
-
-rm test_output.txt
-rm -rf test_dir
