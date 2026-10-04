@@ -16,6 +16,10 @@ print(formatDate(meetup, "%F %T"))
 // Convert timezones: -03:00
 let auto meet_brt = toTZ(meetup, -3)
 print(formatDate(meet_brt, "%F %T%z"))
+print(formatDate(toTZ(meetup, 5, 30), "%F %T%z"))
+// Converting keeps the instant: back in UTC it matches meetup
+print(formatDate(toUTC(meet_brt), "%F %T"))
+print(formatDate(toUTC(meetup), "%F %T"))
 
 // Field extraction
 print(year(bday))

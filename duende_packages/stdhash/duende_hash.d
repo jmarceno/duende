@@ -3,8 +3,9 @@ module duende_packages.stdhash.duende_hash;
 // Hashing helpers exposed to Duende as std.hash / std.digest
 import std.digest.md : MD5;
 import std.digest.sha : SHA1, SHA224, SHA256, SHA384, SHA512, SHA512_224, SHA512_256;
-import std.digest.crc : CRC32, CRC64_ECMA;
-import std.digest.murmurhash : murmurHash3_32;
+import std.digest.crc : CRC32;
+import std.digest.murmurhash : MurmurHash3;
+import std.bitmanip : littleEndianToNative;
 import std.array : appender;
 import std.format : formattedWrite;
 
@@ -27,13 +28,20 @@ string md5(string s) {
 // CRC32 -> uint
 uint crc32(string s) {
     CRC32 c; c.put(cast(ubyte[])s);
-    return c.finish();
+    return littleEndianToNative!uint(c.finish());
 }
 
-// CRC64 (ECMA) -> ulong
+// CRC-64/ECMA-182 (polynomial 0x42F0E1EBA9EA3693, not reflected, no xor) -> ulong
+// std.digest's CRC64ECMA is the reflected CRC-64/XZ variant, which gives different values.
 ulong crc64(string s) {
-    CRC64_ECMA c; c.put(cast(ubyte[])s);
-    return c.finish();
+    enum ulong poly = 0x42F0E1EBA9EA3693UL;
+    ulong crc = 0;
+    foreach (b; cast(const(ubyte)[])s) {
+        crc ^= cast(ulong)b << 56;
+        foreach (_; 0 .. 8)
+            crc = (crc & (1UL << 63)) ? (crc << 1) ^ poly : crc << 1;
+    }
+    return crc;
 }
 
 // SHA1..SHA512 family -> hex string
@@ -67,5 +75,7 @@ string sha512_256(string s) {
 
 // MurmurHash3 x86 32-bit -> uint; accepts optional seed
 uint murmurhash3(string s, uint seed = 0u) {
-    return murmurHash3_32(cast(ubyte[])s, seed);
+    auto h = MurmurHash3!32(seed);
+    h.put(cast(const(ubyte)[])s);
+    return littleEndianToNative!uint(h.finish());
 }
