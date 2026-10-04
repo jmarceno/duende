@@ -66,6 +66,53 @@ mixin template DTypeMixin() {
     }
 
     /**
+     * Render a recursive Duende type, keeping nested generic arguments.
+     * int is the signed 64-bit D long.
+     */
+    private string toDTypeNode(TypeNode node) {
+        if (!node.present) return "auto";
+        switch (node.base) {
+            case DuendeType.INT: return "long";
+            case DuendeType.FLOAT: return "double";
+            case DuendeType.STRING: return "string";
+            case DuendeType.BOOL: return "bool";
+            case DuendeType.BYTES: return "ubyte[]";
+            case DuendeType.VOID: return "void";
+            case DuendeType.LIST:
+                if (!node.args.length) return "string[]";
+                return toDTypeNode(node.args[0]) ~ "[]";
+            case DuendeType.DICT:
+                if (node.args.length >= 2)
+                    return toDTypeNode(node.args[1]) ~ "[" ~ toDTypeNode(node.args[0]) ~ "]";
+                return "string[string]";
+            case DuendeType.REGEX: return "auto";
+            case DuendeType.DATE: return "SysTime";
+            case DuendeType.AUTO: return "auto";
+            case DuendeType.STRUCT:
+            case DuendeType.FRAME:
+            case DuendeType.ENUM:
+            case DuendeType.PROTOCOL:
+            case DuendeType.CUSTOM:
+                return node.name.length ? node.name : "auto";
+            case DuendeType.RESULT:
+                return wrapNamedGeneric("Result", node);
+            case DuendeType.MAYBE:
+                return wrapNamedGeneric("Maybe", node);
+            default:
+                return "auto";
+        }
+    }
+
+    private string wrapNamedGeneric(string ctor, TypeNode node) {
+        string inner;
+        if (node.args.length) inner = toDTypeNode(node.args[0]);
+        else if (node.name.length) inner = node.name;
+        else inner = "auto";
+        if (!inner.length || inner == "auto" || inner == "void") return "auto";
+        return ctor ~ "!(" ~ inner ~ ")";
+    }
+
+    /**
      * Convert a Duende type to a simple D type string without generics.
      * Used for inner types in Result/Maybe declarations.
      */
@@ -180,9 +227,13 @@ auto unwrapValue(R, T)(R result, T defaultValue) {
         } else {
             // Use the current function's return type context
             if (currentFunctionReturnType == DuendeType.RESULT) {
-                string innerTypeName = currentFunctionReturnCustomTypeName && currentFunctionReturnCustomTypeName.length
-                    ? currentFunctionReturnCustomTypeName
-                    : toDTypeSimple(currentFunctionReturnInnerType);
+                string innerTypeName;
+                if (currentFunctionReturnNode.present && currentFunctionReturnNode.args.length)
+                    innerTypeName = toDTypeNode(currentFunctionReturnNode.args[0]);
+                else if (currentFunctionReturnCustomTypeName && currentFunctionReturnCustomTypeName.length)
+                    innerTypeName = currentFunctionReturnCustomTypeName;
+                else
+                    innerTypeName = toDTypeSimple(currentFunctionReturnInnerType);
                 return "Result!(" ~ innerTypeName ~ ").error(" ~ generateExpression(expr.value) ~ ")";
             } else {
                 // Fallback to string for non-function contexts
@@ -202,9 +253,13 @@ auto unwrapValue(R, T)(R result, T defaultValue) {
         } else {
             // Use the current function's return type context for None
             if (currentFunctionReturnType == DuendeType.MAYBE) {
-                string innerTypeName = currentFunctionReturnCustomTypeName && currentFunctionReturnCustomTypeName.length
-                    ? currentFunctionReturnCustomTypeName
-                    : toDTypeSimple(currentFunctionReturnInnerType);
+                string innerTypeName;
+                if (currentFunctionReturnNode.present && currentFunctionReturnNode.args.length)
+                    innerTypeName = toDTypeNode(currentFunctionReturnNode.args[0]);
+                else if (currentFunctionReturnCustomTypeName && currentFunctionReturnCustomTypeName.length)
+                    innerTypeName = currentFunctionReturnCustomTypeName;
+                else
+                    innerTypeName = toDTypeSimple(currentFunctionReturnInnerType);
                 return "Maybe!(" ~ innerTypeName ~ ").none()";
             } else {
                 return "Maybe!string.none()";

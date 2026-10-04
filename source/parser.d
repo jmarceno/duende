@@ -16,6 +16,7 @@ class ParseError : Exception {
 class Parser {
     private Token[] tokens;
     private size_t current;
+    private TypeNode lastTypeNode;
 
     this(Token[] tokens) {
         this.tokens = tokens;
@@ -179,6 +180,7 @@ class Parser {
     DuendeType innerType;
     string innerCustomTypeName;
     DuendeType type = parseType(customTypeName, innerType, innerCustomTypeName);
+        TypeNode typeNode = lastTypeNode;
         consume(TokenType.IDENTIFIER, "Expected variable name");
         string name = previous().value;
 
@@ -194,7 +196,7 @@ class Parser {
             }
         }
 
-    return new VariableDeclaration(name, type, initializer, isMutable, customTypeName, innerType, innerCustomTypeName, !isInLocalScope);
+    return new VariableDeclaration(name, type, initializer, isMutable, customTypeName, innerType, innerCustomTypeName, !isInLocalScope, typeNode);
     }
 
     private Statement functionDeclaration() {
@@ -202,6 +204,7 @@ class Parser {
     DuendeType returnInnerType;
     string returnInnerCustomTypeName;
     DuendeType returnType = parseType(customTypeName, returnInnerType, returnInnerCustomTypeName);
+        TypeNode returnTypeNode = lastTypeNode;
         consume(TokenType.IDENTIFIER, "Expected function name");
         string name = previous().value;
 
@@ -214,6 +217,7 @@ class Parser {
                 DuendeType paramInnerType;
                 string paramInnerCustomTypeName;
                 DuendeType paramType = parseType(paramCustomTypeName, paramInnerType, paramInnerCustomTypeName);
+                TypeNode paramTypeNode = lastTypeNode;
                 bool isNamed = false;
                 // Enforce 'type name' only; ':' is not allowed in parameter declarations
                 if (check(TokenType.COLON)) {
@@ -227,7 +231,9 @@ class Parser {
                 if (match(TokenType.ASSIGN)) {
                     defVal = expression();
                 }
-                parameters ~= Parameter(paramName, paramType, paramCustomTypeName, paramInnerType, isNamed, defVal);
+                Parameter param = Parameter(paramName, paramType, paramCustomTypeName, paramInnerType, isNamed, defVal);
+                param.typeNode = paramTypeNode;
+                parameters ~= param;
             } while (match(TokenType.COMMA));
         }
 
@@ -244,7 +250,7 @@ class Parser {
 
         consume(TokenType.END, "Expected 'end' after function body");
 
-    return new FunctionDeclaration(name, returnType, parameters, body, returnInnerType, returnInnerCustomTypeName);
+    return new FunctionDeclaration(name, returnType, parameters, body, returnInnerType, returnInnerCustomTypeName, returnTypeNode);
     }
 
     private Statement ifStatement() {
@@ -589,8 +595,10 @@ class Parser {
             return matchExpression();
         }
         if (match(TokenType.INTEGER)) {
-            int value = to!int(previous().value);
-            return new LiteralExpression(value);
+            auto tok = previous();
+            auto lit = cast(LiteralExpression)parseIntegerLiteral(tok.value);
+            lit.position = SourcePosition(tok.line, tok.column);
+            return lit;
         }
 
         if (match(TokenType.FLOAT)) {
@@ -1041,6 +1049,7 @@ class Parser {
             if (match(TokenType.LET)) {
                 string customTypeName;
                 DuendeType fieldType = parseType(customTypeName);
+                TypeNode fieldNode = lastTypeNode;
                 consume(TokenType.IDENTIFIER, "Expected field name");
                 string fieldName = previous().value;
                 consume(TokenType.ASSIGN, "Expected '=' in field declaration");
@@ -1048,7 +1057,9 @@ class Parser {
                 // Skip the initializer for now - structs have default values
                 expression();
 
-                fields ~= Parameter(fieldName, fieldType, customTypeName, DuendeType.VOID, false);
+                Parameter field = Parameter(fieldName, fieldType, customTypeName, fieldNode.legacyInner(), false);
+                field.typeNode = fieldNode;
+                fields ~= field;
             } else if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                           TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
                           TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
@@ -1079,12 +1090,13 @@ class Parser {
                 bool isMutable = previous().type == TokenType.VAR;
                 string customTypeName;
                 DuendeType fieldType = parseType(customTypeName);
+                TypeNode fieldNode = lastTypeNode;
                 consume(TokenType.IDENTIFIER, "Expected field name");
                 string fieldName = previous().value;
                 consume(TokenType.ASSIGN, "Expected '=' in field declaration");
                 Expression initializer = expression();
 
-                fields ~= new VariableDeclaration(fieldName, fieldType, initializer, isMutable, customTypeName, DuendeType.VOID, null, false);
+                fields ~= new VariableDeclaration(fieldName, fieldType, initializer, isMutable, customTypeName, fieldNode.legacyInner(), fieldNode.legacyInnerCustom(), false, fieldNode);
             } else if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                           TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
                           TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
@@ -1127,6 +1139,7 @@ class Parser {
 
     private Statement methodDeclaration() {
         DuendeType returnType = parseType();
+        TypeNode returnTypeNode = lastTypeNode;
         consume(TokenType.IDENTIFIER, "Expected method name");
         string name = previous().value;
 
@@ -1147,6 +1160,7 @@ class Parser {
 
                 // Regular 'type name' syntax only; ':' is invalid
                 paramType = parseType(customTypeName);
+                TypeNode paramTypeNode = lastTypeNode;
                 if (check(TokenType.COLON)) {
                     throw new ParseError(": is not allowed in parameter declarations; use 'type name'");
                 }
@@ -1160,7 +1174,9 @@ class Parser {
                     defVal = expression();
                 }
 
-                parameters ~= Parameter(paramName, paramType, customTypeName, DuendeType.VOID, isNamed, defVal);
+                Parameter param = Parameter(paramName, paramType, customTypeName, paramTypeNode.legacyInner(), isNamed, defVal);
+                param.typeNode = paramTypeNode;
+                parameters ~= param;
             } while (match(TokenType.COMMA));
         }
 
@@ -1176,92 +1192,108 @@ class Parser {
         }
 
         consume(TokenType.END, "Expected 'end' after method body");
-        return new MethodDeclaration(name, returnType, parameters, body);
+        return new MethodDeclaration(name, returnType, parameters, body, returnTypeNode);
     }
 
-    private DuendeType parseType(out string customTypeName, out DuendeType innerType, out string innerCustomTypeName) {
-        innerType = DuendeType.VOID; // Default inner type
-        innerCustomTypeName = null;
-        
-        if (match(TokenType.INT_TYPE)) return DuendeType.INT;
-        if (match(TokenType.FLOAT_TYPE)) return DuendeType.FLOAT;
-        if (match(TokenType.STRING_TYPE)) return DuendeType.STRING;
-        if (match(TokenType.BOOL_TYPE)) return DuendeType.BOOL;
-        if (match(TokenType.BYTES_TYPE)) return DuendeType.BYTES;
-        if (match(TokenType.VOID_TYPE)) return DuendeType.VOID;
+    private Expression parseIntegerLiteral(string raw) {
+        // Signed 64-bit range is -9223372036854775808 .. 9223372036854775807.
+        // The positive magnitude of the minimum does not fit in a long; keep it
+        // so unary minus can form that value. Any larger token is rejected.
+        if (raw == "9223372036854775808") {
+            auto lit = new LiteralExpression(0L);
+            lit.intMinMagnitude = true;
+            return lit;
+        }
+        try {
+            return new LiteralExpression(to!long(raw));
+        } catch (ConvException) {
+            throw new ParseError("Integer literal is outside the signed 64-bit int range (-9223372036854775808 .. 9223372036854775807): " ~ raw);
+        }
+    }
+
+    private TypeNode parseTypeNode() {
+        TypeNode node;
+        node.present = true;
+
+        if (match(TokenType.INT_TYPE)) { node.base = DuendeType.INT; lastTypeNode = node; return node; }
+        if (match(TokenType.FLOAT_TYPE)) { node.base = DuendeType.FLOAT; lastTypeNode = node; return node; }
+        if (match(TokenType.STRING_TYPE)) { node.base = DuendeType.STRING; lastTypeNode = node; return node; }
+        if (match(TokenType.BOOL_TYPE)) { node.base = DuendeType.BOOL; lastTypeNode = node; return node; }
+        if (match(TokenType.BYTES_TYPE)) { node.base = DuendeType.BYTES; lastTypeNode = node; return node; }
+        if (match(TokenType.VOID_TYPE)) { node.base = DuendeType.VOID; lastTypeNode = node; return node; }
+        if (match(TokenType.AUTO_TYPE)) { node.base = DuendeType.AUTO; lastTypeNode = node; return node; }
         if (match(TokenType.LIST_TYPE)) {
-            // Support generic list<T>
+            node.base = DuendeType.LIST;
             if (match(TokenType.LESS)) {
-                string innerNameLocal;
-                DuendeType innerInnerType;
-                string innerCustomLocal;
-                innerType = parseType(innerNameLocal, innerInnerType, innerCustomLocal);
-                if (innerType == DuendeType.CUSTOM) {
-                    innerCustomTypeName = innerNameLocal;
-                    customTypeName = innerNameLocal; // expose inner custom for downstream convenience
-                } else {
-                    innerCustomTypeName = innerCustomLocal;
-                }
+                node.args = [parseTypeNode()];
+                if (node.args[0].base == DuendeType.CUSTOM) node.name = node.args[0].name;
                 consume(TokenType.GREATER, "Expected '>' after list inner type");
             }
-            return DuendeType.LIST;
+            lastTypeNode = node;
+            return node;
         }
-        if (match(TokenType.DICT_TYPE)) return DuendeType.DICT;
-        if (match(TokenType.AUTO_TYPE)) return DuendeType.AUTO;
-
-        // Handle Result<T> and Maybe<T>
+        if (match(TokenType.DICT_TYPE)) {
+            node.base = DuendeType.DICT;
+            lastTypeNode = node;
+            return node;
+        }
         if (match(TokenType.RESULT)) {
             consume(TokenType.LESS, "Expected '<' after Result");
-            string innerNameLocal;
-            DuendeType innerInnerType;
-            string innerCustomLocal;
-            innerType = parseType(innerNameLocal, innerInnerType, innerCustomLocal);
-            if (innerType == DuendeType.CUSTOM) {
-                innerCustomTypeName = innerNameLocal;
-                customTypeName = innerNameLocal; // also expose via outer customTypeName for codegen convenience
-            } else {
-                innerCustomTypeName = innerCustomLocal;
-            }
+            node.base = DuendeType.RESULT;
+            node.args = [parseTypeNode()];
+            if (node.args[0].base == DuendeType.CUSTOM) node.name = node.args[0].name;
             consume(TokenType.GREATER, "Expected '>' after Result inner type");
-            return DuendeType.RESULT;
+            lastTypeNode = node;
+            return node;
         }
-
         if (match(TokenType.MAYBE)) {
             consume(TokenType.LESS, "Expected '<' after Maybe");
-            string innerNameLocal;
-            DuendeType innerInnerType;
-            string innerCustomLocal;
-            innerType = parseType(innerNameLocal, innerInnerType, innerCustomLocal);
-            if (innerType == DuendeType.CUSTOM) {
-                innerCustomTypeName = innerNameLocal;
-                customTypeName = innerNameLocal;
-            } else {
-                innerCustomTypeName = innerCustomLocal;
-            }
+            node.base = DuendeType.MAYBE;
+            node.args = [parseTypeNode()];
+            if (node.args[0].base == DuendeType.CUSTOM) node.name = node.args[0].name;
             consume(TokenType.GREATER, "Expected '>' after Maybe inner type");
-            return DuendeType.MAYBE;
+            lastTypeNode = node;
+            return node;
         }
-
-        // Check for custom type (struct, frame, enum names)
         if (match(TokenType.IDENTIFIER)) {
-            customTypeName = previous().value;
-            // Explicitly reject non-Duende primitive names accidentally used as types.
-            // Duende built-ins are handled above; anything else here is a custom type
-            // name (struct/frame/enum) and is allowed. But we blacklist common D
-            // primitive names to avoid leakage (e.g., 'long').
+            node.base = DuendeType.CUSTOM;
+            node.name = previous().value;
             immutable disallowed = [
                 "long", "ulong", "uint", "ushort", "short", "byte", "ubyte",
                 "char", "wchar", "dchar", "size_t", "ptrdiff_t", "double", "real"
             ];
             foreach (d; disallowed) {
-                if (customTypeName == d) {
-                    throw new ParseError("Unknown type '" ~ customTypeName ~ "'. Use Duende types (int, float, string, bool, bytes, void) or a user-defined Struct/Frame/Enum.");
+                if (node.name == d) {
+                    throw new ParseError("Unknown type '" ~ node.name ~ "'. Use Duende types (int, float, string, bool, bytes, void) or a user-defined Struct/Frame/Enum.");
                 }
             }
-            return DuendeType.CUSTOM;
+            lastTypeNode = node;
+            return node;
         }
 
         throw new ParseError("Expected type");
+    }
+
+    private DuendeType parseType(out string customTypeName, out DuendeType innerType, out string innerCustomTypeName) {
+        TypeNode node = parseTypeNode();
+        customTypeName = node.legacyCustom();
+        innerType = node.legacyInner();
+        innerCustomTypeName = node.legacyInnerCustom();
+        return node.base;
+    }
+
+    private void skipTypeAhead() {
+        if (!(check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
+                    TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
+                    TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
+                    TokenType.RESULT, TokenType.MAYBE) || check(TokenType.IDENTIFIER))) {
+            return;
+        }
+        advance();
+        if (!match(TokenType.LESS)) return;
+        skipTypeAhead();
+        while (match(TokenType.COMMA)) skipTypeAhead();
+        if (check(TokenType.GREATER)) advance();
     }
 
     private DuendeType parseType(out string customTypeName) {
@@ -1342,6 +1374,7 @@ class Parser {
     private MethodSignature parseMethodSignature() {
         string customTypeName;
         DuendeType returnType = parseType(customTypeName);
+        TypeNode returnTypeNode = lastTypeNode;
 
         consume(TokenType.IDENTIFIER, "Expected method name");
         string name = previous().value;
@@ -1353,6 +1386,7 @@ class Parser {
             do {
                 string paramCustomTypeName;
                 DuendeType paramType = parseType(paramCustomTypeName);
+                TypeNode paramTypeNode = lastTypeNode;
                 bool isNamed = false;
                 // Enforce 'type name' only; ':' is not allowed in parameter declarations
                 if (check(TokenType.COLON)) {
@@ -1365,7 +1399,9 @@ class Parser {
                 if (match(TokenType.ASSIGN)) {
                     defVal = expression();
                 }
-                parameters ~= Parameter(paramName, paramType, paramCustomTypeName, DuendeType.VOID, isNamed, defVal);
+                Parameter param = Parameter(paramName, paramType, paramCustomTypeName, paramTypeNode.legacyInner(), isNamed, defVal);
+                param.typeNode = paramTypeNode;
+                parameters ~= param;
             } while (match(TokenType.COMMA));
         }
 
@@ -1389,7 +1425,9 @@ class Parser {
             consume(TokenType.END, "Expected 'end' after method body");
         }
 
-        return MethodSignature(name, returnType, parameters, defaultBody, hasDefaultImplementation);
+        MethodSignature sig = MethodSignature(name, returnType, parameters, defaultBody, hasDefaultImplementation);
+        sig.returnTypeNode = returnTypeNode;
+        return sig;
     }
 
     private Statement annotatedDeclaration() {
@@ -1455,9 +1493,12 @@ class Parser {
                 } else {
                     string customTypeName;
                     DuendeType fieldType = parseType(customTypeName);
+                    TypeNode fieldNode = lastTypeNode;
                     consume(TokenType.IDENTIFIER, "Expected field name");
                     string fieldName = previous().value;
-                    fields ~= Parameter(fieldName, fieldType, customTypeName, DuendeType.VOID, false, null);
+                    Parameter field = Parameter(fieldName, fieldType, customTypeName, fieldNode.legacyInner(), false, null);
+                    field.typeNode = fieldNode;
+                    fields ~= field;
                 }
             }
             consumeNewlines();
@@ -1496,11 +1537,12 @@ class Parser {
                 } else {
                     string customTypeName;
                     DuendeType fieldType = parseType(customTypeName);
+                    TypeNode fieldNode = lastTypeNode;
                     consume(TokenType.IDENTIFIER, "Expected field name");
                     string fieldName = previous().value;
                     consume(TokenType.ASSIGN, "Expected '=' in field declaration");
                     Expression initializer = expression();
-                    fields ~= new VariableDeclaration(fieldName, fieldType, initializer, false, customTypeName, DuendeType.VOID, null, false);
+                    fields ~= new VariableDeclaration(fieldName, fieldType, initializer, false, customTypeName, fieldNode.legacyInner(), fieldNode.legacyInnerCustom(), false, fieldNode);
                 }
             }
             consumeNewlines();
@@ -1517,13 +1559,7 @@ class Parser {
         // Field: type identifier (no parentheses)
         size_t saved = current;
 
-        // Skip type
-        if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
-                 TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
-                 TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE) ||
-            check(TokenType.IDENTIFIER)) {
-            advance();
-        }
+        skipTypeAhead();
 
         // Skip identifier
         if (check(TokenType.IDENTIFIER)) {

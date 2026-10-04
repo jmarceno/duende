@@ -45,50 +45,55 @@ class SemanticErrorCollector {
 	}
 }
 
-// Minimal type info for checking
-struct TypeInfo {
-	DuendeType base;
-	string custom; // for CUSTOM types
+private TypeNode typeInfo(DuendeType t, string custom = null) {
+	return TypeNode.of(t, custom);
 }
 
-private TypeInfo typeInfo(DuendeType t, string custom = null) {
-	return TypeInfo(t, custom);
+private string typeInfoToString(TypeNode t) {
+	return t.describe();
 }
 
-private string typeInfoToString(TypeInfo t) {
-	import std.format : format;
-	final switch (t.base) {
-		case DuendeType.CUSTOM:
-			return t.custom.length ? format("%s(%s)", DuendeType.CUSTOM, t.custom) : format("%s", DuendeType.CUSTOM);
-		case DuendeType.RESULT:
-		case DuendeType.MAYBE:
-		case DuendeType.LIST:
-		case DuendeType.DICT:
-		case DuendeType.INT:
-		case DuendeType.FLOAT:
-		case DuendeType.STRING:
-		case DuendeType.BOOL:
-		case DuendeType.BYTES:
-		case DuendeType.VOID:
-		case DuendeType.REGEX:
-		case DuendeType.DATE:
-		case DuendeType.AUTO:
-		case DuendeType.STRUCT:
-		case DuendeType.FRAME:
-		case DuendeType.ENUM:
-		case DuendeType.PROTOCOL:
-			return t.base.to!string;
-	}
+private bool isComparisonOp(string op) {
+	return op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=";
 }
 
-private bool typeCompatible(TypeInfo need, TypeInfo got) {
-	// AUTO accepts anything
-	if (need.base == DuendeType.AUTO) return true;
-	if (got.base == DuendeType.AUTO) return true; // unknown -> don't over-report
+private bool isLogicalOp(string op) {
+	return op == "&&" || op == "||";
+}
+
+private bool isPermissive(TypeNode t) {
+	if (!t.present || t.unknown) return true;
+	return t.base == DuendeType.AUTO && !t.inferred;
+}
+
+private TypeNode resolveAuto(TypeNode declared, TypeNode initType) {
+	if (declared.base != DuendeType.AUTO || declared.inferred) return declared;
+	if (isPermissive(initType)) return TypeNode.unknownType();
+	TypeNode inf = initType;
+	inf.inferred = true;
+	inf.unknown = false;
+	inf.present = true;
+	return inf;
+}
+
+private TypeNode declaredNode(TypeNode node, DuendeType fallback, string custom = null) {
+	if (node.present) return node;
+	return TypeNode.of(fallback, custom);
+}
+
+private bool typeCompatible(TypeNode need, TypeNode got) {
+	if (isPermissive(need) || isPermissive(got)) return true;
 	if (need.base == got.base) {
 		if (need.base == DuendeType.CUSTOM) {
-			if (need.custom.length && got.custom.length)
-				return need.custom == got.custom;
+			if (need.name.length && got.name.length)
+				return need.name == got.name;
+			return true;
+		}
+		if (need.args.length == 0) return true;
+		if (got.args.length == 0) return true;
+		if (need.args.length != got.args.length) return false;
+		foreach (i, arg; need.args) {
+			if (!typeCompatible(arg, got.args[i])) return false;
 		}
 		return true;
 	}
@@ -96,12 +101,6 @@ private bool typeCompatible(TypeInfo need, TypeInfo got) {
 	if (need.base == DuendeType.FLOAT && got.base == DuendeType.INT) return true;
 	// allow implicit conversion to STRING from any non-void type
 	if (need.base == DuendeType.STRING && got.base != DuendeType.VOID) return true;
-	// allow list literal to assign to list type (no inner-type checking here)
-	if (need.base == DuendeType.LIST && got.base == DuendeType.LIST) return true;
-	// allow dict literal to assign to dict type (no key/value type checking here)
-	if (need.base == DuendeType.DICT && got.base == DuendeType.DICT) return true;
-	// allow assigning bytes-typed literal from list<int>
-	if (need.base == DuendeType.BYTES && got.base == DuendeType.BYTES) return true;
 	return false;
 }
 
@@ -118,13 +117,18 @@ class SemanticAnalyzer {
 	// function name -> declaration
 	private FunctionDeclaration[string] functions;
 	// top-level variables (globals)
-	private TypeInfo[string] globals;
+	private TypeNode[string] globals;
 	// enum name -> values set
 	private string[][string] enums; // map enum name -> list of values
+	// struct/frame name -> field name -> type
+	private TypeNode[string][string] typeFields;
 	// recursion guard
 	private size_t maxDepth = 10_000;
 	// whether module has any imports (providers may inject symbols)
 	private bool hasImports;
+	private TypeNode currentReturn;
+	private bool hasCurrentReturn;
+	private string currentFunctionName;
 
 	private string resolveEnumForValue(string valueName) {
 		foreach (enumName, vals; enums) {
@@ -140,9 +144,17 @@ class SemanticAnalyzer {
 			if (auto f = cast(FunctionDeclaration)s) {
 				functions[f.name] = f;
 			} else if (auto v = cast(VariableDeclaration)s) {
-				globals[v.name] = typeInfo(v.type, v.customTypeName);
+				globals[v.name] = declaredNode(v.typeNode, v.type, v.customTypeName);
 			} else if (auto en = cast(EnumDeclaration)s) {
 				enums[en.name] = en.values.dup;
+			} else if (auto st = cast(StructDeclaration)s) {
+				rememberFields(st.name, st.fields);
+			} else if (auto fr = cast(FrameDeclaration)s) {
+				TypeNode[string] fields;
+				foreach (fd; fr.fields) {
+					fields[fd.name] = declaredNode(fd.typeNode, fd.type, fd.customTypeName);
+				}
+				typeFields[fr.name] = fields;
 			} else if (cast(ImportDeclaration)s) {
 				hasImports = true;
 			}
@@ -156,13 +168,21 @@ class SemanticAnalyzer {
 		}
 	}
 
+	private void rememberFields(string typeName, Parameter[] fields) {
+		TypeNode[string] map;
+		foreach (fd; fields) {
+			map[fd.name] = declaredNode(fd.typeNode, fd.type, fd.customTypeName);
+		}
+		typeFields[typeName] = map;
+	}
+
 	// Simple scope chain
 	private struct ScopeEnv {
-		TypeInfo[string] table;
+		TypeNode[string] table;
 		ScopeEnv* parent;
 
-		void define(string name, TypeInfo t) { table[name] = t; }
-		bool lookup(string name, out TypeInfo t) {
+		void define(string name, TypeNode t) { table[name] = t; }
+		bool lookup(string name, out TypeNode t) {
 			if (name in table) { t = table[name]; return true; }
 			if (parent is null) return false;
 			return parent.lookup(name, t);
@@ -176,11 +196,12 @@ class SemanticAnalyzer {
 		if (s is null) return;
 		if (depth > maxDepth) return; // safety
 		if (auto vd = cast(VariableDeclaration)s) {
-			auto ti = typeInfo(vd.type, vd.customTypeName);
+			auto ti = declaredNode(vd.typeNode, vd.type, vd.customTypeName);
 			env.define(vd.name, ti);
 			// analyze initializer
 			if (vd.initializer !is null) {
-				auto et = visitExpr(vd.initializer, sourcePath, errs, env, depth + 1);
+				TypeNode expect = (ti.base == DuendeType.AUTO) ? TypeNode.init : ti;
+				auto et = visitExpr(vd.initializer, sourcePath, errs, env, depth + 1, expect);
 				bool specialOk = false;
 				// Special-case: allow bytes initialized from a list literal of ints
 				if (ti.base == DuendeType.BYTES) {
@@ -189,7 +210,10 @@ class SemanticAnalyzer {
 						specialOk = true;
 					}
 				}
-				if (!typeCompatible(ti, et) && !specialOk) {
+				if (ti.base == DuendeType.AUTO) {
+					ti = resolveAuto(ti, et);
+					env.define(vd.name, ti);
+				} else if (!typeCompatible(ti, et) && !specialOk) {
 					auto pos = normalizePos(vd.position, sourcePath);
 					errs.addError(
 						"Initializer type does not match declared type of '" ~ vd.name ~ "' (need=" ~ typeInfoToString(ti) ~ ", got=" ~ typeInfoToString(et) ~ ")",
@@ -202,15 +226,33 @@ class SemanticAnalyzer {
 			// function body: new scope with params
 			auto child = env.child();
 			foreach (p; f.parameters) {
-				child.define(p.name, typeInfo(p.type, p.customTypeName));
+				child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName));
 			}
+			auto savedReturn = currentReturn;
+			bool savedHas = hasCurrentReturn;
+			string savedName = currentFunctionName;
+			currentReturn = declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName);
+			hasCurrentReturn = true;
+			currentFunctionName = f.name;
 			foreach (st; f.body) visitStmt(st, sourcePath, errs, child, depth + 1);
+			currentReturn = savedReturn;
+			hasCurrentReturn = savedHas;
+			currentFunctionName = savedName;
 			return;
 		}
 		if (auto m = cast(MethodDeclaration)s) {
 			auto child = env.child();
-			foreach (p; m.parameters) child.define(p.name, typeInfo(p.type, p.customTypeName));
+			foreach (p; m.parameters) child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName));
+			auto savedReturn = currentReturn;
+			bool savedHas = hasCurrentReturn;
+			string savedName = currentFunctionName;
+			currentReturn = declaredNode(m.returnTypeNode, m.returnType, null);
+			hasCurrentReturn = true;
+			currentFunctionName = m.name;
 			foreach (st; m.body) visitStmt(st, sourcePath, errs, child, depth + 1);
+			currentReturn = savedReturn;
+			hasCurrentReturn = savedHas;
+			currentFunctionName = savedName;
 			return;
 		}
 		if (auto es = cast(ExpressionStatement)s) {
@@ -218,7 +260,17 @@ class SemanticAnalyzer {
 			return;
 		}
 		if (auto rs = cast(ReturnStatement)s) {
-			visitExpr(rs.value, sourcePath, errs, env, depth + 1);
+			if (rs.value !is null && hasCurrentReturn && !isPermissive(currentReturn) && currentReturn.base != DuendeType.VOID) {
+				auto et = visitExpr(rs.value, sourcePath, errs, env, depth + 1, currentReturn);
+				if (!typeCompatible(currentReturn, et)) {
+					auto pos = normalizePos(rs.position, sourcePath);
+					errs.addError(
+						"Return type does not match '" ~ currentFunctionName ~ "' (need=" ~ typeInfoToString(currentReturn) ~ ", got=" ~ typeInfoToString(et) ~ ")",
+						pos);
+				}
+			} else {
+				visitExpr(rs.value, sourcePath, errs, env, depth + 1);
+			}
 			return;
 		}
 		if (auto ifs = cast(IfStatement)s) {
@@ -240,8 +292,15 @@ class SemanticAnalyzer {
 		}
 		if (auto fi = cast(ForInStatement)s) {
 			auto child = env.child();
-			child.define(fi.variable, typeInfo(DuendeType.AUTO));
-			visitExpr(fi.iterable, sourcePath, errs, child, depth + 1);
+			auto it = visitExpr(fi.iterable, sourcePath, errs, child, depth + 1);
+			TypeNode elem = TypeNode.unknownType();
+			if (it.base == DuendeType.LIST && it.args.length) {
+				elem = it.args[0];
+				elem.inferred = true;
+			} else if (it.base == DuendeType.STRING) {
+				elem = TypeNode.of(DuendeType.STRING);
+			}
+			child.define(fi.variable, elem);
 			foreach (st; fi.body) visitStmt(st, sourcePath, errs, child, depth + 1);
 			return;
 		}
@@ -268,14 +327,47 @@ class SemanticAnalyzer {
 		// other statements ignored for now (Break/Continue validity handled elsewhere)
 	}
 
-	private TypeInfo visitExpr(Expression e, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+	private TypeNode visitExpr(Expression e, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth, TypeNode expected = TypeNode.init) {
 		if (e is null) return typeInfo(DuendeType.VOID);
-		if (depth > maxDepth) return typeInfo(DuendeType.AUTO);
-		if (auto lit = cast(LiteralExpression)e) return typeInfo(lit.type);
+		if (depth > maxDepth) return TypeNode.unknownType();
+		if (auto lit = cast(LiteralExpression)e) {
+			if (lit.intMinMagnitude) {
+				auto pos = getExprPos(lit, sourcePath);
+				errs.addError("Integer literal 9223372036854775808 is outside the signed 64-bit int range. The minimum value is written -9223372036854775808", pos);
+				return TypeNode.unknownType();
+			}
+			return typeInfo(lit.type);
+		}
 		if (cast(BytesLiteralExpression)e !is null) return typeInfo(DuendeType.BYTES);
 		if (cast(RegexLiteralExpression)e !is null) return typeInfo(DuendeType.REGEX);
 		if (auto ll = cast(ListLiteralExpression)e) {
-			foreach (el; ll.elements) { visitExpr(el, sourcePath, errs, env, depth + 1); }
+			if (expected.present && expected.base == DuendeType.BYTES) {
+				foreach (el; ll.elements) visitExpr(el, sourcePath, errs, env, depth + 1, typeInfo(DuendeType.INT));
+				return typeInfo(DuendeType.BYTES);
+			}
+			TypeNode elemExpected;
+			bool checkElem = expected.present && expected.base == DuendeType.LIST && expected.args.length > 0;
+			if (checkElem) elemExpected = expected.args[0];
+			TypeNode seen;
+			bool haveSeen = false;
+			foreach (el; ll.elements) {
+				auto et = visitExpr(el, sourcePath, errs, env, depth + 1, checkElem ? elemExpected : TypeNode.init);
+				if (checkElem && !typeCompatible(elemExpected, et)) {
+					errs.addError(
+						"List element type does not match (need=" ~ typeInfoToString(elemExpected) ~ ", got=" ~ typeInfoToString(et) ~ ")",
+						getExprPos(el, sourcePath));
+				}
+				if (!isPermissive(et)) {
+					if (!haveSeen) {
+						seen = et;
+						haveSeen = true;
+					} else if (!typeCompatible(seen, et) && !typeCompatible(et, seen)) {
+						errs.addError("List elements have inconsistent types", getExprPos(el, sourcePath));
+					}
+				}
+			}
+			if (checkElem) return expected;
+			if (haveSeen) return TypeNode.generic(DuendeType.LIST, [seen]);
 			return typeInfo(DuendeType.LIST);
 		}
 		if (auto dl = cast(DictLiteralExpression)e) {
@@ -288,7 +380,7 @@ class SemanticAnalyzer {
 		if (auto ve = cast(VariableExpression)e) {
 			// Treat known enum names as type-like values (for qualified access Color.Red)
 			if (ve.name in enums) return typeInfo(DuendeType.CUSTOM, ve.name);
-			TypeInfo t;
+			TypeNode t;
 			if (!env.lookup(ve.name, t)) {
 				// Allow bare enum member usage (e.g., ACTIVE) by resolving to its enum type
 				auto en = resolveEnumForValue(ve.name);
@@ -299,21 +391,21 @@ class SemanticAnalyzer {
 				}
 				auto pos = normalizePos(ve.position, sourcePath);
 				errs.addError("Use of undefined variable '" ~ ve.name ~ "'", pos);
-				return typeInfo(DuendeType.AUTO);
+				return TypeNode.unknownType();
 			}
 			return t;
 		}
 		if (auto ae = cast(AssignmentExpression)e) {
-			TypeInfo t;
+			TypeNode t;
 			bool ok = env.lookup(ae.variable, t);
 			if (!ok) {
 				auto pos = normalizePos(ae.position, sourcePath);
 				errs.addError("Assignment to undefined variable '" ~ ae.variable ~ "'", pos);
 				// Still analyze RHS to continue
 				visitExpr(ae.value, sourcePath, errs, env, depth + 1);
-				return typeInfo(DuendeType.AUTO);
+				return TypeNode.unknownType();
 			}
-			auto rhs = visitExpr(ae.value, sourcePath, errs, env, depth + 1);
+			auto rhs = visitExpr(ae.value, sourcePath, errs, env, depth + 1, t);
 			bool specialOk = false;
 			if (t.base == DuendeType.BYTES && cast(ListLiteralExpression)ae.value !is null) {
 				specialOk = true;
@@ -331,9 +423,9 @@ class SemanticAnalyzer {
 			// Return type if known
 			if (ce.name in functions) {
 				auto f = functions[ce.name];
-				return typeInfo(f.returnType, f.returnCustomTypeName);
+				return declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName);
 			}
-			return typeInfo(DuendeType.AUTO);
+			return TypeNode.unknownType();
 		}
 		if (auto me = cast(MethodCallExpression)e) {
 			// Not type-checking methods for now; just traverse
@@ -348,23 +440,40 @@ class SemanticAnalyzer {
 				visitExpr(me.object, sourcePath, errs, env, depth + 1);
 			}
 			foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
-			return typeInfo(DuendeType.AUTO);
+			return TypeNode.unknownType();
 		}
 		if (auto be = cast(BinaryExpression)e) {
 			auto lt = visitExpr(be.left, sourcePath, errs, env, depth + 1);
 			auto rt = visitExpr(be.right, sourcePath, errs, env, depth + 1);
-			// simple arithmetic typing
-			if (lt.base == DuendeType.FLOAT || rt.base == DuendeType.FLOAT) return typeInfo(DuendeType.FLOAT);
-			if (lt.base == DuendeType.INT && rt.base == DuendeType.INT) return typeInfo(DuendeType.INT);
-			return typeInfo(DuendeType.AUTO);
+			if (isComparisonOp(be.operator) || isLogicalOp(be.operator)) return typeInfo(DuendeType.BOOL);
+			if (be.operator == "+" && lt.base == DuendeType.STRING && rt.base == DuendeType.STRING) return typeInfo(DuendeType.STRING);
+			bool leftNum = lt.base == DuendeType.INT || lt.base == DuendeType.FLOAT;
+			bool rightNum = rt.base == DuendeType.INT || rt.base == DuendeType.FLOAT;
+			if (leftNum && rightNum) {
+				if (lt.base == DuendeType.FLOAT || rt.base == DuendeType.FLOAT) return typeInfo(DuendeType.FLOAT);
+				return typeInfo(DuendeType.INT);
+			}
+			return TypeNode.unknownType();
 		}
 		if (auto ue = cast(UnaryExpression)e) {
+			if (ue.operator == "-" ) {
+				if (auto lit = cast(LiteralExpression)ue.operand) {
+					if (lit.intMinMagnitude) return typeInfo(DuendeType.INT);
+				}
+			}
+			if (ue.operator == "!") {
+				visitExpr(ue.operand, sourcePath, errs, env, depth + 1);
+				return typeInfo(DuendeType.BOOL);
+			}
 			return visitExpr(ue.operand, sourcePath, errs, env, depth + 1);
 		}
 		if (auto ie = cast(IndexExpression)e) {
-			visitExpr(ie.object, sourcePath, errs, env, depth + 1);
-			visitExpr(ie.index, sourcePath, errs, env, depth + 1);
-			return typeInfo(DuendeType.AUTO);
+			auto ot = visitExpr(ie.object, sourcePath, errs, env, depth + 1);
+			visitExpr(ie.index, sourcePath, errs, env, depth + 1, typeInfo(DuendeType.INT));
+			if (ot.base == DuendeType.LIST && ot.args.length) return ot.args[0];
+			if (ot.base == DuendeType.DICT && ot.args.length >= 2) return ot.args[1];
+			if (ot.base == DuendeType.STRING) return typeInfo(DuendeType.STRING);
+			return TypeNode.unknownType();
 		}
 		if (auto pe = cast(PropertyExpression)e) {
 			// Special-case: Enum access like Color.Red
@@ -386,8 +495,13 @@ class SemanticAnalyzer {
 				}
 			}
 			// Default behavior
-			visitExpr(pe.object, sourcePath, errs, env, depth + 1);
-			return typeInfo(DuendeType.AUTO);
+			auto ot = visitExpr(pe.object, sourcePath, errs, env, depth + 1);
+			if (ot.base == DuendeType.CUSTOM && ot.name.length) {
+				if (auto fmap = ot.name in typeFields) {
+					if (auto ft = pe.property in *fmap) return *ft;
+				}
+			}
+			return TypeNode.unknownType();
 		}
 		if (auto pae = cast(PropertyAssignmentExpression)e) {
 			visitExpr(pae.object, sourcePath, errs, env, depth + 1);
@@ -408,16 +522,31 @@ class SemanticAnalyzer {
 				if (auto errp = cast(ResultErrorPattern)c.pattern) {
 					if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.AUTO));
 				}
-				visitExpr(c.value, sourcePath, errs, armScope, depth + 1);
+				auto at = visitExpr(c.value, sourcePath, errs, armScope, depth + 1, expected);
+				if (expected.present && !isPermissive(expected) && expected.base != DuendeType.VOID && !typeCompatible(expected, at)) {
+					errs.addError(
+						"Match arm type does not match expected type (need=" ~ typeInfoToString(expected) ~ ", got=" ~ typeInfoToString(at) ~ ")",
+						getExprPos(c.value, sourcePath));
+				}
 			}
-			return typeInfo(DuendeType.AUTO);
+			if (expected.present && !isPermissive(expected)) return expected;
+			return TypeNode.unknownType();
 		}
 		if (auto rc = cast(ResultConstructorExpression)e) {
-			visitExpr(rc.value, sourcePath, errs, env, depth + 1);
+			TypeNode innerExp;
+			if (expected.present && expected.base == DuendeType.RESULT && expected.args.length)
+				innerExp = expected.args[0];
+			auto vt = visitExpr(rc.value, sourcePath, errs, env, depth + 1, innerExp);
+			if (expected.present && expected.base == DuendeType.RESULT) return expected;
+			if (!isPermissive(vt)) return TypeNode.generic(DuendeType.RESULT, [vt]);
 			return typeInfo(DuendeType.RESULT);
 		}
 		if (auto mc = cast(MaybeConstructorExpression)e) {
-			if (mc.value !is null) visitExpr(mc.value, sourcePath, errs, env, depth + 1);
+			TypeNode innerExp;
+			if (expected.present && expected.base == DuendeType.MAYBE && expected.args.length)
+				innerExp = expected.args[0];
+			if (mc.value !is null) visitExpr(mc.value, sourcePath, errs, env, depth + 1, innerExp);
+			if (expected.present && expected.base == DuendeType.MAYBE) return expected;
 			return typeInfo(DuendeType.MAYBE);
 		}
 		if (auto ue2 = cast(UnwrapExpression)e) {
@@ -506,8 +635,9 @@ class SemanticAnalyzer {
 			provided[an] = true;
 			// type-check this arg
 			auto need = f.parameters[pi];
-			auto got = visitExpr(arg, sourcePath, errs, env, depth + 1);
-			if (!typeCompatible(typeInfo(need.type, need.customTypeName), got)) {
+			auto needType = declaredNode(need.typeNode, need.type, need.customTypeName);
+			auto got = visitExpr(arg, sourcePath, errs, env, depth + 1, needType);
+			if (!typeCompatible(needType, got)) {
 				auto pos = getExprPos(arg, sourcePath);
 				errs.addError("Argument type mismatch for parameter '" ~ need.name ~ "' in call to '" ~ ce.name ~ "'", pos);
 			}
@@ -522,8 +652,9 @@ class SemanticAnalyzer {
 			}
 			if (positionalIndex < ce.arguments.length) {
 				auto arg = ce.arguments[positionalIndex++];
-				auto got = visitExpr(arg, sourcePath, errs, env, depth + 1);
-				if (!typeCompatible(typeInfo(p.type, p.customTypeName), got)) {
+				auto needType = declaredNode(p.typeNode, p.type, p.customTypeName);
+				auto got = visitExpr(arg, sourcePath, errs, env, depth + 1, needType);
+				if (!typeCompatible(needType, got)) {
 					auto pos = getExprPos(arg, sourcePath);
 					errs.addError("Argument type mismatch for parameter '" ~ p.name ~ "' in call to '" ~ ce.name ~ "'", pos);
 				}

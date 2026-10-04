@@ -196,6 +196,38 @@ class TestDuendeExamples:
             else:
                 assert False, f"Missing line {i}: expected '{expected_line}'"
 
+    def test_type_unification_example(self):
+        """Comparisons are bool, int is 64-bit, nested lists and returns agree."""
+        source_file = self.examples_dir / "type_unification.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        lines = [ln for ln in stdout.strip().split("\n") if ln.strip()]
+        expected = [
+            "true",
+            "true",
+            "true",
+            "42",
+            "3000000000",
+            "3000000000",
+            "3000000000",
+            "9223372036854775807",
+            "-9223372036854775808",
+            "-9223372036854775808",
+            "3",
+            "-3",
+            "1",
+            "2",
+            "3000000000",
+            "3000000000",
+            "3000000000",
+            "-9223372036854775808",
+            "-9223372036854775808",
+            "-9223372036854775808",
+            "true",
+        ]
+        assert lines == expected, f"expected {expected}, got {lines}"
+
     def test_bytes_example(self):
         """Test the bytes.du example"""
         source_file = self.examples_dir / "bytes.du"

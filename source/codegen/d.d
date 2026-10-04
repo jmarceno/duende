@@ -26,6 +26,7 @@ class DCodeGenerator : CodeGenerator {
     private DuendeType currentFunctionReturnType = DuendeType.VOID; // Track current function return type
     private DuendeType currentFunctionReturnInnerType = DuendeType.VOID; // Track inner type
     private string currentFunctionReturnCustomTypeName; // Track custom inner type name when returning generics
+    private TypeNode currentFunctionReturnNode; // Nested generic return type, when parsed
     private struct VarInfo { DuendeType type; string custom; DuendeType inner; string innerCustom; }
     private VarInfo[string] variableTypes; // Track variable types in current function scope
     // Optional function/method signature registry to support named-args reordering at call sites

@@ -120,6 +120,77 @@ enum DuendeType {
     CUSTOM   // For user-defined types
 }
 
+// One recursive type for parsing, symbols, semantic analysis, and lowering.
+// `present` is false on a default-initialized node that was never parsed.
+// `unknown` is unresolved (external calls, error recovery), distinct from a
+// concrete type that replaced `auto` (`inferred`).
+struct TypeNode {
+    bool present;
+    DuendeType base;
+    string name;
+    TypeNode[] args;
+    bool inferred;
+    bool unknown;
+
+    static TypeNode of(DuendeType base, string name = null) {
+        TypeNode t;
+        t.present = true;
+        t.base = base;
+        t.name = name;
+        return t;
+    }
+
+    static TypeNode generic(DuendeType base, TypeNode[] args, string name = null) {
+        TypeNode t;
+        t.present = true;
+        t.base = base;
+        t.name = name;
+        t.args = args;
+        return t;
+    }
+
+    static TypeNode unknownType() {
+        TypeNode t;
+        t.present = true;
+        t.base = DuendeType.AUTO;
+        t.unknown = true;
+        return t;
+    }
+
+    string legacyCustom() const {
+        if (base == DuendeType.CUSTOM) return name;
+        if (args.length && args[0].base == DuendeType.CUSTOM) return args[0].name;
+        return null;
+    }
+
+    DuendeType legacyInner() const {
+        if (!args.length) return DuendeType.VOID;
+        return args[0].base;
+    }
+
+    string legacyInnerCustom() const {
+        if (!args.length) return null;
+        if (args[0].base == DuendeType.CUSTOM) return args[0].name;
+        return null;
+    }
+
+    string describe() const {
+        if (!present) return "unspecified";
+        if (unknown) return "unknown";
+        string s = (base == DuendeType.CUSTOM) ? (name.length ? name : "CUSTOM") : base.to!string;
+        if (args.length) {
+            s ~= "<";
+            foreach (i, a; args) {
+                if (i) s ~= ", ";
+                s ~= a.describe();
+            }
+            s ~= ">";
+        }
+        if (inferred) s ~= "(inferred)";
+        return s;
+    }
+}
+
 class VariableDeclaration : Statement {
     mixin PositionMixin;
     string name;
@@ -130,9 +201,10 @@ class VariableDeclaration : Statement {
     Expression initializer;
     bool isMutable;
     bool isGlobal; // Flag to indicate if this is a global variable
+    TypeNode typeNode; // Full generic type, including nested arguments
 
     this(string name, DuendeType type, Expression initializer, bool isMutable = false, 
-         string customTypeName = null, DuendeType innerType = DuendeType.VOID, string innerCustomTypeName = null, bool isGlobal = false) {
+         string customTypeName = null, DuendeType innerType = DuendeType.VOID, string innerCustomTypeName = null, bool isGlobal = false, TypeNode typeNode = TypeNode.init) {
         this.name = name;
         this.type = type;
         this.customTypeName = customTypeName;
@@ -141,6 +213,7 @@ class VariableDeclaration : Statement {
         this.initializer = initializer;
         this.isMutable = isMutable;
         this.isGlobal = isGlobal;
+        this.typeNode = typeNode;
     }
 }
 
@@ -152,15 +225,17 @@ class FunctionDeclaration : Statement {
     string returnCustomTypeName; // For custom inner types like Result<Status>
     Parameter[] parameters;
     Statement[] body;
+    TypeNode returnTypeNode;
 
     this(string name, DuendeType returnType, Parameter[] parameters, Statement[] body, 
-         DuendeType returnInnerType = DuendeType.VOID, string returnCustomTypeName = null) {
+         DuendeType returnInnerType = DuendeType.VOID, string returnCustomTypeName = null, TypeNode returnTypeNode = TypeNode.init) {
         this.name = name;
         this.returnType = returnType;
         this.returnInnerType = returnInnerType;
         this.returnCustomTypeName = returnCustomTypeName;
         this.parameters = parameters;
         this.body = body;
+        this.returnTypeNode = returnTypeNode;
     }
 }
 
@@ -172,6 +247,7 @@ struct Parameter {
     bool isNamed;
     // Optional default value for parameters (null if no default)
     Expression defaultValue;
+    TypeNode typeNode;
 }
 
 class ExpressionStatement : Statement {
@@ -364,8 +440,11 @@ class LiteralExpression : Expression {
     mixin PositionMixin;
     Variant value;
     DuendeType type;
+    // Source token was 9223372036854775808. That magnitude does not fit in a
+    // signed 64-bit int; it is valid only as the operand of unary minus.
+    bool intMinMagnitude;
 
-    this(int value) {
+    this(long value) {
         this.value = Variant(value);
         this.type = DuendeType.INT;
     }
@@ -543,12 +622,14 @@ class MethodDeclaration : Statement {
     DuendeType returnType;
     Parameter[] parameters;
     Statement[] body;
+    TypeNode returnTypeNode;
 
-    this(string name, DuendeType returnType, Parameter[] parameters, Statement[] body) {
+    this(string name, DuendeType returnType, Parameter[] parameters, Statement[] body, TypeNode returnTypeNode = TypeNode.init) {
         this.name = name;
         this.returnType = returnType;
         this.parameters = parameters;
         this.body = body;
+        this.returnTypeNode = returnTypeNode;
     }
 }
 
@@ -583,6 +664,7 @@ struct MethodSignature {
     Parameter[] parameters;
     Statement[] defaultBody; // For default implementations
     bool hasDefaultImplementation;
+    TypeNode returnTypeNode;
 }
 
 // Annotation support

@@ -87,6 +87,17 @@ mixin template DStatementsMixin() {
         return "";
     }
 
+    private string renderVarType(VariableDeclaration varDecl) {
+        if (varDecl.typeNode.present) return toDTypeNode(varDecl.typeNode);
+        string custom = varDecl.innerCustomTypeName.length ? varDecl.innerCustomTypeName : varDecl.customTypeName;
+        return toDType(varDecl.type, custom, varDecl.innerType);
+    }
+
+    private string renderParamType(Parameter param) {
+        if (param.typeNode.present) return toDTypeNode(param.typeNode);
+        return toDType(param.type, param.customTypeName, param.innerType);
+    }
+
     /**
      * Generate variable declarations with proper type handling.
      */
@@ -100,7 +111,7 @@ mixin template DStatementsMixin() {
         string custom = varDecl.innerCustomTypeName.length ? varDecl.innerCustomTypeName : varDecl.customTypeName;
 
         // Determine declared type, with a safety fallback to 'auto' to avoid invalid Result!(auto)/Maybe!(auto)
-        string declaredType = toDType(varDecl.type, custom, varDecl.innerType);
+        string declaredType = renderVarType(varDecl);
         bool needsAutoFallback =
             (varDecl.type == DuendeType.RESULT || varDecl.type == DuendeType.MAYBE) &&
             varDecl.innerType == DuendeType.CUSTOM &&
@@ -122,15 +133,9 @@ mixin template DStatementsMixin() {
                 auto listExpr = cast(ListLiteralExpression)varDecl.initializer;
                 // If generic element type is provided, honor it for empty initialization
                 if (listExpr.elements.length == 0) {
-                    // Compute element D type
-                    string elem;
-                    if (varDecl.innerType == DuendeType.CUSTOM) {
-                        elem = (varDecl.innerCustomTypeName.length ? varDecl.innerCustomTypeName : varDecl.customTypeName);
-                    } else {
-                        elem = toDTypeSimple(varDecl.innerType);
-                    }
-                    if (!elem.length || elem == "auto") elem = "string"; // fallback
-                    initExpr = "(" ~ elem ~ "[]).init";
+                    string full = declaredType;
+                    if (!full.length || full == "auto") full = "string[]";
+                    initExpr = "(" ~ full ~ ").init";
                 } else if (varDecl.innerType == DuendeType.VOID) {
                     // Legacy untyped list: coerce elements to string to match string[] default
                     auto buf = appender!string();
@@ -248,12 +253,15 @@ mixin template DStatementsMixin() {
      */
     private string generateFunctionDeclaration(FunctionDeclaration funcDecl) {
         auto result = appender!string();
-        string returnType = toDType(funcDecl.returnType, funcDecl.returnCustomTypeName, funcDecl.returnInnerType);
+        string returnType = funcDecl.returnTypeNode.present
+            ? toDTypeNode(funcDecl.returnTypeNode)
+            : toDType(funcDecl.returnType, funcDecl.returnCustomTypeName, funcDecl.returnInnerType);
 
         // Set current function context for error generation
         currentFunctionReturnType = funcDecl.returnType;
         currentFunctionReturnInnerType = funcDecl.returnInnerType;
         currentFunctionReturnCustomTypeName = funcDecl.returnCustomTypeName;
+        currentFunctionReturnNode = funcDecl.returnTypeNode;
 
         // Avoid emitting invalid Result!(auto)/Maybe!(auto) in signatures; fall back to 'auto'
         if ((funcDecl.returnType == DuendeType.RESULT || funcDecl.returnType == DuendeType.MAYBE) &&
@@ -291,7 +299,7 @@ mixin template DStatementsMixin() {
                 // Use the corresponding template type parameter instead of 'auto'
                 pType = autoParamToTemplate[param.name];
             } else {
-                pType = toDType(param.type, param.customTypeName, param.innerType);
+                pType = renderParamType(param);
             }
             result ~= pType ~ " " ~ param.name;
             if (param.defaultValue !is null) {
@@ -484,7 +492,7 @@ mixin template DStatementsMixin() {
 
         // Generate immutable fields
         foreach (field; structDecl.fields) {
-            result ~= indent() ~ "immutable " ~ toDType(field.type, field.customTypeName) ~ " " ~ field.name ~ ";\n";
+            result ~= indent() ~ "immutable " ~ renderParamType(field) ~ " " ~ field.name ~ ";\n";
         }
 
         // Generate constructor
@@ -492,7 +500,7 @@ mixin template DStatementsMixin() {
             result ~= "\n" ~ indent() ~ "this(";
             foreach (i, field; structDecl.fields) {
                 if (i > 0) result ~= ", ";
-                result ~= toDType(field.type, field.customTypeName) ~ " " ~ field.name;
+                result ~= renderParamType(field) ~ " " ~ field.name;
             }
             result ~= ") {\n";
             indentLevel++;
@@ -557,9 +565,9 @@ mixin template DStatementsMixin() {
         // Generate fields
         foreach (field; frameDecl.fields) {
             if (field.isMutable) {
-                result ~= indent() ~ toDType(field.type, field.customTypeName) ~ " " ~ field.name ~ ";\n";
+                result ~= indent() ~ renderVarType(field) ~ " " ~ field.name ~ ";\n";
             } else {
-                result ~= indent() ~ "immutable " ~ toDType(field.type, field.customTypeName) ~ " " ~ field.name ~ ";\n";
+                result ~= indent() ~ "immutable " ~ renderVarType(field) ~ " " ~ field.name ~ ";\n";
             }
         }
 
@@ -568,7 +576,7 @@ mixin template DStatementsMixin() {
             result ~= "\n" ~ indent() ~ "this(";
             foreach (i, field; frameDecl.fields) {
                 if (i > 0) result ~= ", ";
-                result ~= toDType(field.type, field.customTypeName) ~ " " ~ field.name;
+                result ~= renderVarType(field) ~ " " ~ field.name;
             }
             result ~= ") {\n";
             indentLevel++;
@@ -645,7 +653,8 @@ mixin template DStatementsMixin() {
                 }
             }
 
-            result ~= indent() ~ toDType(method.returnType) ~ " " ~ method.name;
+            string methodReturn = method.returnTypeNode.present ? toDTypeNode(method.returnTypeNode) : toDType(method.returnType);
+            result ~= indent() ~ methodReturn ~ " " ~ method.name;
             if (templateTypeParams.length > 0) {
                 result ~= "(" ~ templateTypeParams.join(", ") ~ ")";
             }
@@ -655,7 +664,7 @@ mixin template DStatementsMixin() {
                 if (i > 0) result ~= ", ";
                 string pType = (param.type == DuendeType.AUTO)
                     ? autoParamToTemplate[param.name]
-                    : toDType(param.type, param.customTypeName);
+                    : renderParamType(param);
                 result ~= pType ~ " " ~ param.name;
                 if (param.defaultValue !is null) {
                     result ~= " = " ~ generateExpression(param.defaultValue);
@@ -709,7 +718,8 @@ mixin template DStatementsMixin() {
                     }
                 }
 
-                result ~= indent() ~ toDType(method.returnType) ~ " " ~ method.name;
+                string methodReturn = method.returnTypeNode.present ? toDTypeNode(method.returnTypeNode) : toDType(method.returnType);
+                result ~= indent() ~ methodReturn ~ " " ~ method.name;
                 if (templateTypeParams.length > 0) {
                     result ~= "(" ~ templateTypeParams.join(", ") ~ ")";
                 }
@@ -718,7 +728,7 @@ mixin template DStatementsMixin() {
                     if (i > 0) result ~= ", ";
                     string pType = (param.type == DuendeType.AUTO)
                         ? autoParamToTemplate[param.name]
-                        : toDType(param.type, param.customTypeName);
+                        : renderParamType(param);
                     result ~= pType ~ " " ~ param.name;
                     if (param.defaultValue !is null) {
                         result ~= " = " ~ generateExpression(param.defaultValue);
@@ -759,7 +769,10 @@ mixin template DStatementsMixin() {
             }
         }
 
-        result ~= indent() ~ toDType(methodDecl.returnType) ~ " " ~ methodDecl.name;
+        currentFunctionReturnType = methodDecl.returnType;
+        currentFunctionReturnNode = methodDecl.returnTypeNode;
+        string methodReturn = methodDecl.returnTypeNode.present ? toDTypeNode(methodDecl.returnTypeNode) : toDType(methodDecl.returnType);
+        result ~= indent() ~ methodReturn ~ " " ~ methodDecl.name;
         if (templateTypeParams.length > 0) {
             result ~= "(" ~ templateTypeParams.join(", ") ~ ")";
         }
@@ -771,7 +784,7 @@ mixin template DStatementsMixin() {
             if (param.type == DuendeType.AUTO) {
                 pType = autoParamToTemplate[param.name];
             } else {
-                pType = toDType(param.type, param.customTypeName);
+                pType = renderParamType(param);
             }
             result ~= pType ~ " " ~ param.name;
             if (param.defaultValue !is null) {

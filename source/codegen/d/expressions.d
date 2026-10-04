@@ -112,7 +112,8 @@ mixin template DExpressionsMixin() {
     private string generateLiteral(LiteralExpression literal) {
     switch (literal.type) {
             case DuendeType.INT:
-                return to!string(literal.value.get!int);
+                if (literal.intMinMagnitude) return "0L";
+                return to!string(literal.value.get!long) ~ "L";
             case DuendeType.FLOAT:
                 {
                     string s = to!string(literal.value.get!double);
@@ -172,6 +173,11 @@ mixin template DExpressionsMixin() {
      * Generate unary expressions (negation, logical not).
      */
     private string generateUnaryExpression(UnaryExpression unary) {
+        if (unary.operator == "-") {
+            if (auto lit = cast(LiteralExpression)unary.operand) {
+                if (lit.intMinMagnitude) return "long.min";
+            }
+        }
         return "(" ~ unary.operator ~ generateExpression(unary.operand) ~ ")";
     }
 
@@ -948,7 +954,7 @@ mixin template DExpressionsMixin() {
             // Convert the element to an integer and cast to ubyte
             if (auto literal = cast(LiteralExpression)element) {
                 if (literal.type == DuendeType.INT) {
-                    result ~= "cast(ubyte)" ~ to!string(literal.value.get!int);
+                    result ~= "cast(ubyte)" ~ to!string(literal.value.get!long);
                 } else {
                     result ~= "cast(ubyte)" ~ generateExpression(element);
                 }

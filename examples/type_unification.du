@@ -1,0 +1,60 @@
+int idInt(int n) do
+    return n
+end
+
+list<int> secondRow(list<list<int>> rows) do
+    return rows[1]
+end
+
+frame Grid() do
+    var list<list<int>> rows = [[0]]
+end
+
+int main() do
+    let bool less = 1 < 2
+    let bool notEq = 3 != 4
+    let bool logic = less && notEq && !(1 > 2)
+    print(less)
+    print(notEq)
+    print(logic)
+
+    let int explicit = 42
+    let auto inferred = 3000000000
+    let int fromAuto = inferred
+    print(explicit)
+    print(inferred)
+    print(fromAuto)
+
+    let int wide = 3000000000
+    let int maxv = 9223372036854775807
+    let int minv = -9223372036854775808
+    let int wrapped = maxv + 1
+    print(wide)
+    print(maxv)
+    print(minv)
+    print(wrapped)
+
+    print(int(3.9))
+    print(int(-3.9))
+
+    let list<list<int>> nested = [[1, 2], [wide, minv]]
+    let list<int> row = nested[0]
+    let int cell = nested[1][0]
+    print(row[0])
+    print(row[1])
+    print(cell)
+
+    let int echoed = idInt(wide)
+    let list<int> passed = secondRow(nested)
+    print(echoed)
+    print(passed[0])
+    print(passed[1])
+    print(idInt(minv))
+
+    var Grid g = Grid(nested)
+    let int fieldCell = g.rows[1][1]
+    print(fieldCell)
+
+    let auto flag = 1 < 2
+    print(flag)
+end

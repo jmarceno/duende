@@ -44,9 +44,24 @@
 let float b = 3.5
 let string s = "text"
 let list&lt;int&gt; xs = [1, 2, 3]
+let list&lt;list&lt;int&gt;&gt; grid = [[1, 2], [3]]
 let dict d = {"k": 1}
 let auto n = 42 // inferred as int
+let bool ok = 1 &lt; 2
 </code></pre>
+
+      <h2>int</h2>
+      <p><code>int</code> is a signed 64-bit two's complement integer. Literals must be in the closed range <code>-9223372036854775808</code> .. <code>9223372036854775807</code>. A literal outside that range is rejected. The minimum value is written with a leading minus; the positive magnitude <code>9223372036854775808</code> is not itself a valid <code>int</code>.</p>
+      <p>Arithmetic wraps modulo 2<sup>64</sup>. <code>9223372036854775807 + 1</code> is <code>-9223372036854775808</code>. <code>int</code> converts to <code>float</code> implicitly; values beyond the 53-bit mantissa are not all exact. <code>int(x)</code> truncates a float toward zero (<code>int(3.9)</code> is <code>3</code>, <code>int(-3.9)</code> is <code>-3</code>). A float that is not a finite value in range becomes <code>0</code>.</p>
+
+      <h2>Comparisons and logic</h2>
+      <p><code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code> produce <code>bool</code>. Arithmetic operators produce <code>int</code> or <code>float</code>. A <code>bool</code> result can be stored in a <code>bool</code> variable.</p>
+
+      <h2>auto</h2>
+      <p><code>auto</code> takes the type of its initializer when that type is known, and later uses are checked as that type. <code>let auto n = 42</code> is an <code>int</code>. <code>let auto ok = 1 &lt; 2</code> is a <code>bool</code>. If the initializer's type cannot be resolved (for example a call into an imported library), the binding stays unresolved and is not treated as a concrete type.</p>
+
+      <h2>Nested generics</h2>
+      <p>Generic arguments are kept at every level: parameters, returns, fields, and expressions. <code>list&lt;list&lt;int&gt;&gt;</code> is a list of int lists, so indexing once yields <code>list&lt;int&gt;</code> and indexing again yields <code>int</code>. The same rules apply to <code>Result</code> and <code>Maybe</code> payloads such as <code>Result&lt;list&lt;int&gt;&gt;</code>. An empty list literal takes its element type from the declared type: <code>let list&lt;list&lt;int&gt;&gt; rows = []</code>.</p>
 
   <h2>Generics-like containers</h2>
   <p>Containers use explicit element types, e.g., <code>list&lt;int&gt;</code>, <code>list&lt;string&gt;</code>. Empty list literals require context: <code>let list&lt;string&gt; xs = []</code>. Algebraic results use constructor names (see <a href="result-maybe.html">Result & Maybe</a>).</p>
