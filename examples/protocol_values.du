@@ -1,0 +1,82 @@
+// Implementing a protocol does not change how a struct or frame stores its data.
+// Structs stay values: copies are independent and == compares fields.
+// Frames stay references: names share one object and == compares identity.
+
+protocol Shape do
+  float area()
+
+  string describe() do
+    return "shape with area ${this.area()}"
+  end
+end
+
+struct PlainSize() do
+  let float w = 0
+  let float h = 0
+
+  float area() do
+    return this.w * this.h
+  end
+end
+
+@Implements(Shape)
+struct Size() do
+  let float w = 0
+  let float h = 0
+
+  float area() do
+    return this.w * this.h
+  end
+
+  Size grow(float d) do
+    return Size(this.w + d, this.h + d)
+  end
+end
+
+@Implements(Shape)
+frame Box() do
+  var float w = 0
+  var float h = 0
+
+  float area() do
+    return this.w * this.h
+  end
+
+  void grow(float d) do
+    this.w = this.w + d
+    this.h = this.h + d
+  end
+end
+
+// Generic code uses the protocol's methods through static dispatch
+string report(auto s) do
+  return s.describe()
+end
+
+int main() do
+  // Annotated and unannotated structs behave the same way
+  let PlainSize p1 = PlainSize(2.0, 3.0)
+  let PlainSize p2 = p1
+  print("plain equal copies: ${p1 == p2}")
+  print("plain equal values: ${p1 == PlainSize(2.0, 3.0)}")
+
+  let Size s1 = Size(2.0, 3.0)
+  let Size s2 = s1
+  let Size s3 = s1.grow(1.0)
+  print("struct equal copies: ${s1 == s2}")
+  print("struct equal values: ${s1 == Size(2.0, 3.0)}")
+  print("struct grown is new: ${s1 == s3}")
+  print("struct areas: ${s1.area()} ${s3.area()}")
+  print(report(s1))
+
+  // Frames keep reference semantics
+  var Box b1 = Box(2.0, 3.0)
+  var Box b2 = b1
+  let Box b3 = Box(2.0, 3.0)
+  b2.grow(1.0)
+  print("frame shared update: ${b1.area()}")
+  print("frame same object: ${b1 == b2}")
+  print("frame equal fields, other object: ${b1 == b3}")
+  print(report(b3))
+  return 0
+end

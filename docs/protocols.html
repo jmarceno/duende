@@ -66,6 +66,19 @@ let ConsoleStructGreeter sg = ConsoleStructGreeter()
 print(sg.defaultGreet("Foo"))
 </code></pre>
 
+      <h2>Rules</h2>
+      <ul>
+        <li>An implementer must define every protocol method that has no default, with the same name and number of parameters; otherwise a compile error is emitted.</li>
+        <li>Default methods are added to the implementer. A method the implementer defines itself replaces the default.</li>
+        <li>Implementing a protocol never changes storage: a struct stays a value (copied, compared by its fields) and a frame stays a reference. See <a href="structs-frames.html">Structs &amp; Frames</a>.</li>
+        <li>Protocol methods are called directly on the struct or frame, or through an <code>auto</code> parameter, which is resolved at compile time for each type:</li>
+      </ul>
+      <pre><code>string report(auto s) do
+  return s.describe()
+end
+</code></pre>
+      <p>A protocol name is not yet a variable or parameter type, so there is no implicit boxing or dynamic dispatch of structs.</p>
+
       <div class="see-also">
         See also: <a href="structs-frames.html">Structs & Frames</a>, <a href="functions.html">Functions</a>
       </div>

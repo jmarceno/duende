@@ -81,16 +81,6 @@ class DCodeGenerator : CodeGenerator {
         foreach (stmt; program.statements) {
             if (auto fr = cast(FrameDeclaration)stmt) {
                 frameTypes[fr.name] = fr.name;
-            } else if (auto st = cast(StructDeclaration)stmt) {
-                // If a struct declares @Implements, it is generated as a class; treat as frame for constructors
-                if (st.annotations) {
-                    foreach (ann; st.annotations) {
-                        if (ann.name == "Implements" && ann.arguments.length > 0) {
-                            frameTypes[st.name] = st.name;
-                            break;
-                        }
-                    }
-                }
             } else if (auto en = cast(EnumDeclaration)stmt) {
                 enumTypes[en.name] = en.name;
             }

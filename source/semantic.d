@@ -165,6 +165,8 @@ class SemanticAnalyzer {
 	private string[][string] enums; // map enum name -> list of values
 	// struct/frame name -> fields and which methods write those fields
 	private AggregateSymbol[string] aggregates;
+	// protocols declared in this module
+	private ProtocolDeclaration[string] protocols;
 	// recursion guard
 	private size_t maxDepth = 10_000;
 	// whether module has any imports (providers may inject symbols)
@@ -196,7 +198,14 @@ class SemanticAnalyzer {
 				rememberFrame(fr);
 			} else if (cast(ImportDeclaration)s) {
 				hasImports = true;
+			} else if (auto pd = cast(ProtocolDeclaration)s) {
+				protocols[pd.name] = pd;
 			}
+		}
+		// Conformance: every protocol method without a default must be defined by the implementer
+		foreach (s; prog.statements) {
+			if (auto st = cast(StructDeclaration)s) checkConformance("Struct", st.name, st.annotations, st.methods, sourcePath, errs);
+			else if (auto fr = cast(FrameDeclaration)s) checkConformance("Frame", fr.name, fr.annotations, fr.methods, sourcePath, errs);
 		}
 		// Pass 2: analyze statements with a scope stack
 		ScopeEnv env;
@@ -1002,6 +1011,28 @@ class SemanticAnalyzer {
 			return false;
 		}
 		return false;
+	}
+
+	private void checkConformance(string kind, string typeName, Annotation[] annotations, MethodDeclaration[] methods,
+			string sourcePath, SemanticErrorCollector errs) {
+		foreach (ann; annotations) {
+			if (ann.name != "Implements") continue;
+			foreach (protoName; ann.arguments) {
+				auto pd = protoName in protocols;
+				if (pd is null) continue; // declared in another module; the D compiler still checks it
+				foreach (sig; (*pd).methods) {
+					if (sig.hasDefaultImplementation) continue;
+					bool found = false;
+					foreach (m; methods) {
+						if (m.name == sig.name && m.parameters.length == sig.parameters.length) { found = true; break; }
+					}
+					if (!found) {
+						errs.addError(kind ~ " '" ~ typeName ~ "' implements protocol '" ~ protoName ~ "' but does not define method '" ~ sig.name ~ "' with " ~ sig.parameters.length.to!string ~ " parameter(s)",
+							SourcePosition(1, 1, sourcePath));
+					}
+				}
+			}
+		}
 	}
 
 	/**

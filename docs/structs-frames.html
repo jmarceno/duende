@@ -62,6 +62,16 @@ var MovablePoint p2 = MovablePoint(3.0, 4.0)
 p2.move(1.0, 1.0)
 </code></pre>
 
+      <h2>Copying, equality and identity</h2>
+      <table>
+        <tr><th></th><th>Struct</th><th>Frame</th></tr>
+        <tr><td>Kind</td><td>Value</td><td>Reference</td></tr>
+        <tr><td><code>let b = a</code></td><td>Copies the value; <code>a</code> and <code>b</code> are independent</td><td>Both names refer to the same frame</td></tr>
+        <tr><td><code>a == b</code></td><td>True when every field is equal</td><td>True only for the same frame (identity)</td></tr>
+        <tr><td>Changing data</td><td>Not possible; methods return a new struct</td><td>Methods and <code>var</code> names may update fields in place, visible through every name</td></tr>
+      </table>
+      <p>These guarantees do not depend on annotations: a struct that implements a <a href="protocols.html">protocol</a> is still a value, and a frame is still a reference.</p>
+
       <div class="see-also">
         See also: <a href="variables.html">Variables</a>, <a href="protocols.html">Protocols</a>
       </div>
