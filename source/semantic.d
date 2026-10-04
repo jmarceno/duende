@@ -116,12 +116,26 @@ private SourcePosition normalizePos(SourcePosition pos, string fileFallback) {
 class SemanticAnalyzer {
 	// function name -> declaration
 	private FunctionDeclaration[string] functions;
+	// One symbol record: the recursive type plus whether the binding may be reassigned.
+	private struct Binding {
+		TypeNode type;
+		bool mutable;
+	}
+	private struct FieldSymbol {
+		TypeNode type;
+		bool mutable;
+	}
+	private struct AggregateSymbol {
+		bool isFrame;
+		FieldSymbol[string] fields;
+		bool[string] mutatingMethods;
+	}
 	// top-level variables (globals)
-	private TypeNode[string] globals;
+	private Binding[string] globals;
 	// enum name -> values set
 	private string[][string] enums; // map enum name -> list of values
-	// struct/frame name -> field name -> type
-	private TypeNode[string][string] typeFields;
+	// struct/frame name -> fields and which methods write those fields
+	private AggregateSymbol[string] aggregates;
 	// recursion guard
 	private size_t maxDepth = 10_000;
 	// whether module has any imports (providers may inject symbols)
@@ -144,17 +158,13 @@ class SemanticAnalyzer {
 			if (auto f = cast(FunctionDeclaration)s) {
 				functions[f.name] = f;
 			} else if (auto v = cast(VariableDeclaration)s) {
-				globals[v.name] = declaredNode(v.typeNode, v.type, v.customTypeName);
+				globals[v.name] = Binding(declaredNode(v.typeNode, v.type, v.customTypeName), v.isMutable);
 			} else if (auto en = cast(EnumDeclaration)s) {
 				enums[en.name] = en.values.dup;
 			} else if (auto st = cast(StructDeclaration)s) {
-				rememberFields(st.name, st.fields);
+				rememberStruct(st);
 			} else if (auto fr = cast(FrameDeclaration)s) {
-				TypeNode[string] fields;
-				foreach (fd; fr.fields) {
-					fields[fd.name] = declaredNode(fd.typeNode, fd.type, fd.customTypeName);
-				}
-				typeFields[fr.name] = fields;
+				rememberFrame(fr);
 			} else if (cast(ImportDeclaration)s) {
 				hasImports = true;
 			}
@@ -162,30 +172,57 @@ class SemanticAnalyzer {
 		// Pass 2: analyze statements with a scope stack
 		ScopeEnv env;
 		// seed with globals
-		foreach (k, t; globals) env.define(k, t);
+		foreach (k, b; globals) env.define(k, b.type, b.mutable);
 		foreach (s; prog.statements) {
 			visitStmt(s, sourcePath, errs, env, 0);
 		}
 	}
 
-	private void rememberFields(string typeName, Parameter[] fields) {
-		TypeNode[string] map;
-		foreach (fd; fields) {
-			map[fd.name] = declaredNode(fd.typeNode, fd.type, fd.customTypeName);
+	private void rememberStruct(StructDeclaration st) {
+		AggregateSymbol agg;
+		agg.isFrame = false;
+		foreach (fd; st.fields) {
+			agg.fields[fd.name] = FieldSymbol(declaredNode(fd.typeNode, fd.type, fd.customTypeName), false);
 		}
-		typeFields[typeName] = map;
+		aggregates[st.name] = agg;
 	}
 
-	// Simple scope chain
+	private void rememberFrame(FrameDeclaration fr) {
+		AggregateSymbol agg;
+		agg.isFrame = true;
+		foreach (fd; fr.fields) {
+			agg.fields[fd.name] = FieldSymbol(declaredNode(fd.typeNode, fd.type, fd.customTypeName), fd.isMutable);
+		}
+		bool[string] direct;
+		foreach (m; fr.methods) {
+			if (methodAssignsThis(m)) direct[m.name] = true;
+		}
+		bool[string] mut = direct;
+		bool changed = true;
+		while (changed) {
+			changed = false;
+			foreach (m; fr.methods) {
+				if (m.name in mut) continue;
+				if (methodCallsMutatingThis(m, mut)) {
+					mut[m.name] = true;
+					changed = true;
+				}
+			}
+		}
+		agg.mutatingMethods = mut;
+		aggregates[fr.name] = agg;
+	}
+
+	// Simple scope chain. Mutability lives on the binding, next to its type.
 	private struct ScopeEnv {
-		TypeNode[string] table;
+		Binding[string] table;
 		ScopeEnv* parent;
 
-		void define(string name, TypeNode t) { table[name] = t; }
-		bool lookup(string name, out TypeNode t) {
-			if (name in table) { t = table[name]; return true; }
+		void define(string name, TypeNode t, bool mutable) { table[name] = Binding(t, mutable); }
+		bool lookup(string name, out Binding b) {
+			if (auto p = name in table) { b = *p; return true; }
 			if (parent is null) return false;
-			return parent.lookup(name, t);
+			return parent.lookup(name, b);
 		}
 		ScopeEnv child() {
 			ScopeEnv c; c.parent = &this; return c;
@@ -197,8 +234,6 @@ class SemanticAnalyzer {
 		if (depth > maxDepth) return; // safety
 		if (auto vd = cast(VariableDeclaration)s) {
 			auto ti = declaredNode(vd.typeNode, vd.type, vd.customTypeName);
-			env.define(vd.name, ti);
-			// analyze initializer
 			if (vd.initializer !is null) {
 				TypeNode expect = (ti.base == DuendeType.AUTO) ? TypeNode.init : ti;
 				auto et = visitExpr(vd.initializer, sourcePath, errs, env, depth + 1, expect);
@@ -211,8 +246,7 @@ class SemanticAnalyzer {
 					}
 				}
 				if (ti.base == DuendeType.AUTO) {
-					ti = resolveAuto(ti, et);
-					env.define(vd.name, ti);
+					applyInferred(vd, ti, et);
 				} else if (!typeCompatible(ti, et) && !specialOk) {
 					auto pos = normalizePos(vd.position, sourcePath);
 					errs.addError(
@@ -220,13 +254,24 @@ class SemanticAnalyzer {
 						pos);
 				}
 			}
+			rejectMutableStruct(vd, ti, sourcePath, errs);
+			vd.valueIsShared = typeIsShared(ti);
+			env.define(vd.name, ti, vd.isMutable);
+			return;
+		}
+		if (auto sd = cast(StructDeclaration)s) {
+			foreach (m; sd.methods) visitMethod(m, sd.name, false, sourcePath, errs, env, depth + 1);
+			return;
+		}
+		if (auto fd = cast(FrameDeclaration)s) {
+			foreach (m; fd.methods) visitMethod(m, fd.name, true, sourcePath, errs, env, depth + 1);
 			return;
 		}
 		if (auto f = cast(FunctionDeclaration)s) {
 			// function body: new scope with params
 			auto child = env.child();
 			foreach (p; f.parameters) {
-				child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName));
+				child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName), true);
 			}
 			auto savedReturn = currentReturn;
 			bool savedHas = hasCurrentReturn;
@@ -242,7 +287,7 @@ class SemanticAnalyzer {
 		}
 		if (auto m = cast(MethodDeclaration)s) {
 			auto child = env.child();
-			foreach (p; m.parameters) child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName));
+			foreach (p; m.parameters) child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName), true);
 			auto savedReturn = currentReturn;
 			bool savedHas = hasCurrentReturn;
 			string savedName = currentFunctionName;
@@ -284,7 +329,7 @@ class SemanticAnalyzer {
 		if (auto fs = cast(ForStatement)s) {
 			// loop var is int
 			auto child = env.child();
-			child.define(fs.variable, typeInfo(DuendeType.INT));
+			child.define(fs.variable, typeInfo(DuendeType.INT), false);
 			visitExpr(fs.start, sourcePath, errs, child, depth + 1);
 			visitExpr(fs.end, sourcePath, errs, child, depth + 1);
 			foreach (st; fs.body) visitStmt(st, sourcePath, errs, child, depth + 1);
@@ -300,7 +345,7 @@ class SemanticAnalyzer {
 			} else if (it.base == DuendeType.STRING) {
 				elem = TypeNode.of(DuendeType.STRING);
 			}
-			child.define(fi.variable, elem);
+			child.define(fi.variable, elem, false);
 			foreach (st; fi.body) visitStmt(st, sourcePath, errs, child, depth + 1);
 			return;
 		}
@@ -315,10 +360,10 @@ class SemanticAnalyzer {
 			foreach (c; ms.cases) {
 				auto armScope = env.child();
 				if (auto okp = cast(ResultOkPattern)c.pattern) {
-					if (okp.bindName.length) armScope.define(okp.bindName, typeInfo(DuendeType.AUTO));
+					if (okp.bindName.length) armScope.define(okp.bindName, typeInfo(DuendeType.AUTO), false);
 				}
 				if (auto errp = cast(ResultErrorPattern)c.pattern) {
-					if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.AUTO));
+					if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.AUTO), false);
 				}
 				foreach (st; c.body) visitStmt(st, sourcePath, errs, armScope, depth + 1);
 			}
@@ -380,8 +425,8 @@ class SemanticAnalyzer {
 		if (auto ve = cast(VariableExpression)e) {
 			// Treat known enum names as type-like values (for qualified access Color.Red)
 			if (ve.name in enums) return typeInfo(DuendeType.CUSTOM, ve.name);
-			TypeNode t;
-			if (!env.lookup(ve.name, t)) {
+			Binding b;
+			if (!env.lookup(ve.name, b)) {
 				// Allow bare enum member usage (e.g., ACTIVE) by resolving to its enum type
 				auto en = resolveEnumForValue(ve.name);
 				if (en !is null) return typeInfo(DuendeType.CUSTOM, en);
@@ -393,17 +438,22 @@ class SemanticAnalyzer {
 				errs.addError("Use of undefined variable '" ~ ve.name ~ "'", pos);
 				return TypeNode.unknownType();
 			}
-			return t;
+			return b.type;
 		}
 		if (auto ae = cast(AssignmentExpression)e) {
-			TypeNode t;
-			bool ok = env.lookup(ae.variable, t);
+			Binding b;
+			bool ok = env.lookup(ae.variable, b);
 			if (!ok) {
 				auto pos = normalizePos(ae.position, sourcePath);
 				errs.addError("Assignment to undefined variable '" ~ ae.variable ~ "'", pos);
 				// Still analyze RHS to continue
 				visitExpr(ae.value, sourcePath, errs, env, depth + 1);
 				return TypeNode.unknownType();
+			}
+			TypeNode t = b.type;
+			if (!b.mutable) {
+				auto pos = normalizePos(ae.position, sourcePath);
+				errs.addError("Cannot assign to let binding '" ~ ae.variable ~ "'", pos);
 			}
 			auto rhs = visitExpr(ae.value, sourcePath, errs, env, depth + 1, t);
 			bool specialOk = false;
@@ -436,10 +486,21 @@ class SemanticAnalyzer {
 					skipObject = true; // treat as external type qualifier
 				}
 			}
+			TypeNode ot;
 			if (!skipObject) {
-				visitExpr(me.object, sourcePath, errs, env, depth + 1);
+				ot = visitExpr(me.object, sourcePath, errs, env, depth + 1);
 			}
 			foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+			if (ot.base == DuendeType.CUSTOM && ot.name.length) {
+				if (auto agg = ot.name in aggregates) {
+					if (agg.isFrame && (me.method in agg.mutatingMethods) && receiverIsLet(me.object, env)) {
+						string rname = receiverName(me.object);
+						errs.addError(
+							"Cannot call mutating method '" ~ me.method ~ "' on let binding '" ~ rname ~ "'",
+							getExprPos(me, sourcePath));
+					}
+				}
+			}
 			return TypeNode.unknownType();
 		}
 		if (auto be = cast(BinaryExpression)e) {
@@ -497,14 +558,15 @@ class SemanticAnalyzer {
 			// Default behavior
 			auto ot = visitExpr(pe.object, sourcePath, errs, env, depth + 1);
 			if (ot.base == DuendeType.CUSTOM && ot.name.length) {
-				if (auto fmap = ot.name in typeFields) {
-					if (auto ft = pe.property in *fmap) return *ft;
+				if (auto agg = ot.name in aggregates) {
+					if (auto ft = pe.property in agg.fields) return ft.type;
 				}
 			}
 			return TypeNode.unknownType();
 		}
 		if (auto pae = cast(PropertyAssignmentExpression)e) {
-			visitExpr(pae.object, sourcePath, errs, env, depth + 1);
+			auto ot = visitExpr(pae.object, sourcePath, errs, env, depth + 1);
+			checkPropertyWrite(pae, ot, sourcePath, errs, env);
 			visitExpr(pae.value, sourcePath, errs, env, depth + 1);
 			return typeInfo(DuendeType.AUTO);
 		}
@@ -517,10 +579,10 @@ class SemanticAnalyzer {
 			foreach (c; me2.cases) {
 				auto armScope = env.child();
 				if (auto okp = cast(ResultOkPattern)c.pattern) {
-					if (okp.bindName.length) armScope.define(okp.bindName, typeInfo(DuendeType.AUTO));
+					if (okp.bindName.length) armScope.define(okp.bindName, typeInfo(DuendeType.AUTO), false);
 				}
 				if (auto errp = cast(ResultErrorPattern)c.pattern) {
-					if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.AUTO));
+					if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.AUTO), false);
 				}
 				auto at = visitExpr(c.value, sourcePath, errs, armScope, depth + 1, expected);
 				if (expected.present && !isPermissive(expected) && expected.base != DuendeType.VOID && !typeCompatible(expected, at)) {
@@ -571,7 +633,7 @@ class SemanticAnalyzer {
 		}
 		if (auto le = cast(LambdaExpression)e) {
 			auto child = env.child();
-			foreach (p; le.parameters) child.define(p, typeInfo(DuendeType.AUTO));
+			foreach (p; le.parameters) child.define(p, typeInfo(DuendeType.AUTO), true);
 			visitExpr(le.body, sourcePath, errs, child, depth + 1);
 			return typeInfo(DuendeType.AUTO);
 		}
@@ -605,6 +667,175 @@ class SemanticAnalyzer {
 		if (auto n = cast(MatchExpression)e) return normalizePos(n.position, file);
 		// Fallback
 		return SourcePosition(1,1,file);
+	}
+
+	private void visitMethod(MethodDeclaration m, string typeName, bool isFrame, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		auto child = env.child();
+		child.define("this", typeInfo(DuendeType.CUSTOM, typeName), isFrame);
+		foreach (p; m.parameters) child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName), true);
+		auto savedReturn = currentReturn;
+		bool savedHas = hasCurrentReturn;
+		string savedName = currentFunctionName;
+		currentReturn = declaredNode(m.returnTypeNode, m.returnType, null);
+		hasCurrentReturn = true;
+		currentFunctionName = m.name;
+		foreach (st; m.body) visitStmt(st, sourcePath, errs, child, depth + 1);
+		currentReturn = savedReturn;
+		hasCurrentReturn = savedHas;
+		currentFunctionName = savedName;
+	}
+
+	private void applyInferred(VariableDeclaration vd, ref TypeNode ti, TypeNode et) {
+		auto resolved = resolveAuto(ti, et);
+		if (!resolved.inferred) return;
+		ti = resolved;
+		vd.typeNode = resolved;
+		vd.type = resolved.base;
+		if (resolved.base == DuendeType.CUSTOM && resolved.name.length) vd.customTypeName = resolved.name;
+		vd.innerType = resolved.legacyInner();
+		vd.innerCustomTypeName = resolved.legacyInnerCustom();
+	}
+
+	private bool typeIsShared(TypeNode t) {
+		if (t.base == DuendeType.LIST || t.base == DuendeType.DICT || t.base == DuendeType.BYTES) return true;
+		if (t.base == DuendeType.CUSTOM && t.name.length) {
+			if (auto agg = t.name in aggregates) return agg.isFrame;
+		}
+		if (t.base == DuendeType.FRAME) return true;
+		return false;
+	}
+
+	private void rejectMutableStruct(VariableDeclaration vd, TypeNode ti, string sourcePath, SemanticErrorCollector errs) {
+		if (!vd.isMutable) return;
+		if (ti.base != DuendeType.CUSTOM || !ti.name.length) return;
+		if (auto agg = ti.name in aggregates) {
+			if (!agg.isFrame) {
+				auto pos = normalizePos(vd.position, sourcePath);
+				errs.addError("Struct '" ~ ti.name ~ "' cannot be declared with var; use let", pos);
+			}
+		}
+	}
+
+	private bool receiverIsLet(Expression obj, ref ScopeEnv env) {
+		if (auto ve = cast(VariableExpression)obj) {
+			Binding b;
+			if (env.lookup(ve.name, b)) return !b.mutable;
+		}
+		return false;
+	}
+
+	private string receiverName(Expression obj) {
+		if (auto ve = cast(VariableExpression)obj) return ve.name;
+		return "value";
+	}
+
+	private void checkPropertyWrite(PropertyAssignmentExpression pae, TypeNode ot, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env) {
+		if (ot.base != DuendeType.CUSTOM || !ot.name.length) return;
+		auto agg = ot.name in aggregates;
+		if (agg is null) return;
+		if (!agg.isFrame) {
+			errs.addError("Cannot assign to field '" ~ pae.property ~ "' of struct '" ~ ot.name ~ "'", getExprPos(pae, sourcePath));
+			return;
+		}
+		if (receiverIsLet(pae.object, env)) {
+			errs.addError("Cannot mutate let binding '" ~ receiverName(pae.object) ~ "'", getExprPos(pae, sourcePath));
+			return;
+		}
+		if (auto field = pae.property in agg.fields) {
+			if (!field.mutable) {
+				errs.addError("Cannot assign to let field '" ~ pae.property ~ "' of frame '" ~ ot.name ~ "'", getExprPos(pae, sourcePath));
+			}
+		}
+	}
+
+	private bool methodAssignsThis(MethodDeclaration m) {
+		foreach (st; m.body) if (stmtWritesThis(st, null)) return true;
+		return false;
+	}
+
+	private bool methodCallsMutatingThis(MethodDeclaration m, bool[string] mut) {
+		foreach (st; m.body) if (stmtWritesThis(st, mut)) return true;
+		return false;
+	}
+
+	// mut is null when looking for direct field writes. Otherwise also follow this.method calls.
+	private bool stmtWritesThis(Statement s, bool[string] mut) {
+		if (s is null) return false;
+		if (auto es = cast(ExpressionStatement)s) return exprWritesThis(es.expression, mut);
+		if (auto rs = cast(ReturnStatement)s) return exprWritesThis(rs.value, mut);
+		if (auto ds = cast(DeferStatement)s) return exprWritesThis(ds.call, mut);
+		if (auto ifs = cast(IfStatement)s) {
+			if (exprWritesThis(ifs.condition, mut)) return true;
+			foreach (st; ifs.thenBranch) if (stmtWritesThis(st, mut)) return true;
+			foreach (el; ifs.elifClauses) {
+				if (exprWritesThis(el.condition, mut)) return true;
+				foreach (st; el.body) if (stmtWritesThis(st, mut)) return true;
+			}
+			foreach (st; ifs.elseBranch) if (stmtWritesThis(st, mut)) return true;
+			return false;
+		}
+		if (auto fs = cast(ForStatement)s) {
+			if (exprWritesThis(fs.start, mut) || exprWritesThis(fs.end, mut)) return true;
+			foreach (st; fs.body) if (stmtWritesThis(st, mut)) return true;
+			return false;
+		}
+		if (auto fi = cast(ForInStatement)s) {
+			if (exprWritesThis(fi.iterable, mut)) return true;
+			foreach (st; fi.body) if (stmtWritesThis(st, mut)) return true;
+			return false;
+		}
+		if (auto ws = cast(WhileStatement)s) {
+			if (exprWritesThis(ws.condition, mut)) return true;
+			foreach (st; ws.body) if (stmtWritesThis(st, mut)) return true;
+			return false;
+		}
+		if (auto ms = cast(MatchStatement)s) {
+			if (exprWritesThis(ms.subject, mut)) return true;
+			foreach (c; ms.cases) foreach (st; c.body) if (stmtWritesThis(st, mut)) return true;
+			return false;
+		}
+		if (auto f = cast(FunctionDeclaration)s) {
+			foreach (st; f.body) if (stmtWritesThis(st, mut)) return true;
+		}
+		return false;
+	}
+
+	private bool exprWritesThis(Expression e, bool[string] mut) {
+		if (e is null) return false;
+		if (auto pa = cast(PropertyAssignmentExpression)e) {
+			if (auto ve = cast(VariableExpression)pa.object) {
+				if (ve.name == "this") return true;
+			}
+			return exprWritesThis(pa.object, mut) || exprWritesThis(pa.value, mut);
+		}
+		if (auto mc = cast(MethodCallExpression)e) {
+			if (mut !is null) {
+				if (auto ve = cast(VariableExpression)mc.object) {
+					if (ve.name == "this" && (mc.method in mut)) return true;
+				}
+			}
+			if (exprWritesThis(mc.object, mut)) return true;
+			foreach (a; mc.arguments) if (exprWritesThis(a, mut)) return true;
+			return false;
+		}
+		if (auto ae = cast(AssignmentExpression)e) return exprWritesThis(ae.value, mut);
+		if (auto ce = cast(CallExpression)e) {
+			foreach (a; ce.arguments) if (exprWritesThis(a, mut)) return true;
+			return false;
+		}
+		if (auto be = cast(BinaryExpression)e) return exprWritesThis(be.left, mut) || exprWritesThis(be.right, mut);
+		if (auto ue = cast(UnaryExpression)e) return exprWritesThis(ue.operand, mut);
+		if (auto ie = cast(IndexExpression)e) return exprWritesThis(ie.object, mut) || exprWritesThis(ie.index, mut);
+		if (auto pe = cast(PropertyExpression)e) return exprWritesThis(pe.object, mut);
+		if (auto se = cast(StringInterpolationExpression)e) {
+			foreach (ex; se.expressions) if (exprWritesThis(ex, mut)) return true;
+			return false;
+		}
+		if (auto cc = cast(ConstructorCallExpression)e) {
+			foreach (a; cc.arguments) if (exprWritesThis(a, mut)) return true;
+			return false;
+		}
+		return false;
 	}
 
 	private void checkFunctionCall(CallExpression ce, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {

@@ -45,6 +45,9 @@
           </ul>
         </li>
       </ul>
+      <h2>Bindings</h2>
+      <p><code>let</code> and <code>var</code> control the name, not the collection. A <code>let</code> list or dict cannot be assigned a new collection. <code>add</code> and <code>sort</code> still update the existing list, whether the name was written <code>let list&lt;int&gt;</code> or <code>let auto</code>. <code>sort</code> is in place, so another name for that list sees the new order. <code>add</code> can allocate a larger array and leave older names pointing at the previous elements.</p>
+
       <h2>Lists</h2>
   <pre><code>var list&lt;int&gt; numbers = [1, 2, 3, 4, 5]
 numbers.add(6)

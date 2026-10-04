@@ -926,6 +926,34 @@ class TestDuendeExamples:
         assert ("Directory created async:" in output_text or "Directory already exists:" in output_text), \
             "No directory operation output found"
 
+    def test_mutability_example(self):
+        """let freezes the name; var rebinds; lists and frames follow that split"""
+        source_file = self.examples_dir / "mutability.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        lines = [ln for ln in stdout.strip().split('\n') if ln.strip()]
+        expected = [
+            "id:1",
+            "id:2",
+            "base:2",
+            "counter:7",
+            "param:11",
+            "sums:310",
+            "vars:11",
+            "varAuto:302",
+            "sorted:a",
+            "grown:2",
+            "autoSorted:y",
+            "struct:1",
+            "moved:4",
+            "autoStruct:9",
+            "frame:4",
+            "frameY:5",
+            "letFrame:5",
+        ]
+        assert lines == expected, f"Expected {expected}, got {lines}"
+
     def test_semantic_errors_example(self):
         """Test that semantic_errors.du example fails compilation with appropriate error messages"""
         source_file = self.examples_dir / "semantic_errors.du"

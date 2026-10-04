@@ -191,28 +191,30 @@ mixin template DStatementsMixin() {
         }
 
         // Decide if we can/should defer initialization to main
-    bool canDefer = hasInitializer && atModuleScope && deferGlobalInitializersMode && !isCompileTimeConstant(varDecl.initializer);
+        bool canDefer = hasInitializer && atModuleScope && deferGlobalInitializersMode && !isCompileTimeConstant(varDecl.initializer);
+        bool seal = !varDecl.isMutable && !varDecl.valueIsShared && varDecl.type != DuendeType.AUTO && varDecl.type != DuendeType.REGEX;
+        bool hoist = canDefer && seal && currentStatementIndex >= 0 && currentStatementIndex < letHoistAllowed.length && letHoistAllowed[currentStatementIndex];
 
-        // If we are at module scope and plan to defer a non-constant initializer,
-        // force mutable declaration (immutable cannot be assigned later) and avoid 'immutable'.
-        if (canDefer || varDecl.isMutable || varDecl.type == DuendeType.AUTO) {
-            // For auto with deferred init, use typeof(init) to allow declaration without initializer
+        // immutable is only storage for a let whose value is not shared. It is not the language rule.
+        // Shared values (lists, dicts, bytes, frames) stay mutable so their contents can change.
+        // A runtime let that must run after other top-level statements also stays mutable and is
+        // assigned once, in source order; later assignment is rejected by the semantic check.
+        if (hoist) {
+            result ~= "immutable " ~ declaredType ~ " " ~ varDecl.name;
+        } else if (canDefer || !seal) {
             if (canDefer && varDecl.type == DuendeType.AUTO) {
                 result ~= "typeof(" ~ initExpr ~ ") " ~ varDecl.name;
             } else {
                 result ~= declaredType ~ " " ~ varDecl.name;
             }
         } else {
-            // For list/dict, avoid immutable since many expressions yield mutable arrays
-            if (varDecl.type == DuendeType.LIST || varDecl.type == DuendeType.DICT) {
-                result ~= declaredType ~ " " ~ varDecl.name;
-            } else {
-                result ~= "immutable " ~ declaredType ~ " " ~ varDecl.name;
-            }
+            result ~= "immutable " ~ declaredType ~ " " ~ varDecl.name;
         }
 
         if (hasInitializer) {
-            if (canDefer) {
+            if (hoist) {
+                hoistedGlobalInits ~= DeferredInit(varDecl.name, initExpr, currentStatementIndex);
+            } else if (canDefer) {
                 string rhs = initExpr;
                 // For bytes, ensure we initialize with a mutable copy at runtime
                 if (varDecl.type == DuendeType.BYTES) {

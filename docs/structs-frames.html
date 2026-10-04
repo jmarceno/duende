@@ -45,7 +45,9 @@ let Point moved = p1.move(2, 3)
       <h2>Frame</h2>
       <ul>
         <li>Mutable fields and methods that mutate in place.</li>
-        <li>Can be declared with <code>var</code> or <code>let</code>, but mutating methods require a mutable binding.</li>
+        <li>Declare the name with <code>var</code> or <code>let</code>. <code>let</code> only freezes that name: you can read fields and call methods that do not write them.</li>
+        <li>A method that assigns <code>this.field</code>, and an assignment <code>obj.field = ...</code>, require the receiver name to be <code>var</code>. A <code>let</code> field cannot be assigned.</li>
+        <li>Two <code>var</code> names can refer to one frame. Updating one is visible through the other. A function parameter is a <code>var</code> binding, so it may update a frame that the caller still holds in a <code>let</code>.</li>
       </ul>
       <pre><code>frame MovablePoint() do
     var float x = 0

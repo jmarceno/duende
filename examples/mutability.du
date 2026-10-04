@@ -1,0 +1,83 @@
+// let freezes the name. var can be assigned again.
+// Lists can be updated in place. Frames mutate only through a var name.
+
+int nextId(int n) do
+    print("id:${n}")
+    return n + 1
+end
+
+int rebind(int n) do
+    n = n + 10
+    return n
+end
+
+let int base = nextId(1)
+var int counter = nextId(2)
+
+struct point() do
+    let float x = 0
+    let float y = 0
+    point move(float dx, float dy) do
+        return point(this.x + dx, this.y + dy)
+    end
+end
+
+frame movablePoint() do
+    var float x = 0
+    var float y = 0
+    void move(float dx, float dy) do
+        this.x = this.x + dx
+        this.y = this.y + dy
+    end
+    float readX() do
+        return this.x
+    end
+end
+
+int main() do
+    counter = counter + 4
+    print("base:${base}")
+    print("counter:${counter}")
+    print("param:${rebind(1)}")
+
+    let int annotated = 10
+    let auto inferred = 300
+    var int annotatedVar = 1
+    var auto inferredVar = 2
+    annotatedVar = annotatedVar + annotated
+    inferredVar = inferredVar + inferred
+    print("sums:${annotated + inferred}")
+    print("vars:${annotatedVar}")
+    print("varAuto:${inferredVar}")
+
+    let list<string> names = ["b", "a", "c"]
+    let list<string> same = names
+    same.sort()
+    print("sorted:${names.first}")
+
+    let list<int> grown = [1]
+    grown.add(2)
+    print("grown:${grown.length}")
+
+    let auto namesAuto = ["z", "y"]
+    namesAuto.sort()
+    print("autoSorted:${namesAuto.first}")
+
+    let point p = point(1.0, 2.0)
+    let point moved = p.move(3.0, 4.0)
+    print("struct:${p.x}")
+    print("moved:${moved.x}")
+
+    let auto pAuto = point(8.0, 9.0)
+    print("autoStruct:${pAuto.y}")
+
+    var movablePoint box = movablePoint(3.0, 4.0)
+    var movablePoint other = box
+    other.move(1.0, 1.0)
+    print("frame:${box.x}")
+    print("frameY:${box.y}")
+
+    let movablePoint frozen = movablePoint(5.0, 6.0)
+    print("letFrame:${frozen.readX()}")
+    return 0
+end

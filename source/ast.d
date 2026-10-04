@@ -201,6 +201,8 @@ class VariableDeclaration : Statement {
     Expression initializer;
     bool isMutable;
     bool isGlobal; // Flag to indicate if this is a global variable
+    // List, dict, bytes, and frame values stay mutable in D. let still forbids rebinding the name.
+    bool valueIsShared;
     TypeNode typeNode; // Full generic type, including nested arguments
 
     this(string name, DuendeType type, Expression initializer, bool isMutable = false, 

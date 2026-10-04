@@ -35,6 +35,9 @@ class DCodeGenerator : CodeGenerator {
     // When emitting module-level globals, defer non-constant initializers to run inside main
     private struct DeferredInit { string name; string expr; int pos; }
     private DeferredInit[] deferredGlobalInits;
+    // let values with no shared contents, initialized before any later runtime statement
+    private DeferredInit[] hoistedGlobalInits;
+    private bool[] letHoistAllowed;
     private bool deferGlobalInitializersMode = false;
     private int currentStatementIndex = -1; // track position for ordered defers
 
@@ -165,9 +168,12 @@ class DCodeGenerator : CodeGenerator {
             }
         }
 
-        // Emit global variable declarations at module level first (before functions that may use them)
-        // Defer non-constant initializers into main when generating an entry module, preserving source order by recording positions
+        // Emit global variable declarations at module level first (before functions that may use them).
+        // A let of a non-shared value can be D immutable. Runtime initializers of those lets run in
+        // shared static this, in source order, when nothing earlier must run first. Other runtime
+        // initializers stay in main so they keep their place among top-level statements.
         deferGlobalInitializersMode = !isLibraryModule;
+        prepareLetHoist(program);
         foreach (i, stmt; program.statements) {
             currentStatementIndex = cast(int)i;
             if (cast(VariableDeclaration)stmt) {
@@ -177,6 +183,14 @@ class DCodeGenerator : CodeGenerator {
         }
         deferGlobalInitializersMode = false;
         currentStatementIndex = -1;
+        if (hoistedGlobalInits.length) {
+            result ~= "shared static this() {\n";
+            foreach (di; hoistedGlobalInits) {
+                result ~= "    " ~ di.name ~ " = " ~ di.expr ~ ";\n";
+            }
+            result ~= "}\n\n";
+            hoistedGlobalInits.length = 0;
+        }
 
         // Second pass: emit type declarations and functions
         foreach (stmt; program.statements) {
@@ -233,6 +247,26 @@ class DCodeGenerator : CodeGenerator {
         }
 
         return result.data;
+    }
+
+    private bool isHoistNeutral(Statement stmt) {
+        return cast(ImportDeclaration)stmt || cast(FunctionDeclaration)stmt || cast(StructDeclaration)stmt
+            || cast(FrameDeclaration)stmt || cast(EnumDeclaration)stmt || cast(ProtocolDeclaration)stmt;
+    }
+
+    private void prepareLetHoist(Program program) {
+        letHoistAllowed.length = program.statements.length;
+        bool blocked = false;
+        foreach (i, stmt; program.statements) {
+            letHoistAllowed[i] = !blocked;
+            if (auto vd = cast(VariableDeclaration)stmt) {
+                bool deferrable = vd.initializer !is null && !isCompileTimeConstant(vd.initializer);
+                bool seal = !vd.isMutable && !vd.valueIsShared && vd.type != DuendeType.AUTO && vd.type != DuendeType.REGEX;
+                if (deferrable && !seal) blocked = true;
+            } else if (!isHoistNeutral(stmt)) {
+                blocked = true;
+            }
+        }
     }
 
     private string indent() {

@@ -25,15 +25,26 @@
   <main>
     <div class="container">
       <h2>let vs var</h2>
+      <p><code>let</code> freezes the name. <code>var</code> allows a later assignment to that same name. This is about the binding, not about whether the value's contents can change.</p>
       <ul>
-        <li><code>let</code> declares an immutable binding.</li>
-        <li><code>var</code> declares a mutable binding (you can assign a new value).</li>
+        <li><code>let</code> — the name cannot be assigned again. Annotated and inferred forms follow the same rule: <code>let int x = 1</code> and <code>let auto x = 1</code>.</li>
+        <li><code>var</code> — the name can be assigned again: <code>var int y = 1</code> and <code>var auto y = 1</code>.</li>
+        <li>Parameters are reassignable locals. Reassigning a parameter does not change the caller's binding.</li>
+        <li><code>for</code> and <code>for-in</code> names, and names bound in a <code>match</code>, are <code>let</code> bindings.</li>
+        <li>Lists, dicts, and bytes are shared values. <code>let list&lt;int&gt; xs = [1]</code> cannot be rebound, but <code>xs.add(2)</code> and <code>xs.sort()</code> update that value. An alias created before <code>sort</code> sees the sorted elements. <code>add</code> may detach a list from older aliases when the array grows.</li>
+        <li>Assigning to a <code>let</code> name is rejected. So is calling a frame method that writes fields, or writing a frame field, when the receiver name is <code>let</code>.</li>
       </ul>
       <pre><code>let int x = 42
 var int y = 13
 y = y + 1
 print(x + y)
+
+let list&lt;string&gt; names = ["b", "a"]
+let list&lt;string&gt; same = names
+same.sort()
+print(names.first) // "a"
 </code></pre>
+      <p>A <code>let</code> whose value is not shared (<code>int</code>, <code>float</code>, <code>string</code>, <code>bool</code>, enum, struct, and other value types) is stored so the generated program cannot assign it again. A runtime initializer for that kind of global runs at startup, in source order, when no earlier statement or deferred <code>var</code> has to run first. If one does, the initializer stays in source order among the top-level statements and the compiler still rejects a later assignment. Lists, dicts, bytes, frames, and bindings whose type is still unresolved keep mutable storage because their contents, or the D representation, are not a frozen value. <code>let</code> still forbids rebinding those names.</p>
 
       <h2>Global Variables</h2>
       <p>Variables declared outside of functions, frames, or structs are treated as <strong>global variables</strong>. They are accessible from any function, frame, or struct within the same module.</p>
@@ -98,9 +109,9 @@ end
 
       <h2>Struct and frame rules</h2>
       <ul>
-        <li>Struct fields are immutable. Methods return new values rather than modifying in place.</li>
-        <li>Frames are mutable; methods can change fields in place.</li>
-        <li>Declaring a struct with <code>var</code> is disallowed; use <code>let</code>. See <a href="structs-frames.html">Structs & Frames</a>.</li>
+        <li>Struct fields are immutable. Methods return new values rather than modifying in place. Declare a struct with <code>let</code>. <code>var</code> is rejected.</li>
+        <li>A frame name declared with <code>let</code> can be read. Methods that write fields, and field assignments, require a <code>var</code> receiver. <code>let</code> does not follow the value through a parameter: the parameter is a new reassignable binding and may update the same frame.</li>
+        <li>See <a href="structs-frames.html">Structs & Frames</a>.</li>
       </ul>
 
       <div class="see-also">
