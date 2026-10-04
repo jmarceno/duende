@@ -1,3 +1,5 @@
+**ALWAYS UPDATE `docs` when making changes to the language that affect its user facing behavior.**
+
 # Duende
 
 Compiler for the Duende language, written in D. It transpiles `.du` source to D and builds a native binary with `dmd` (default) or `ldc`.
