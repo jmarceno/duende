@@ -95,7 +95,7 @@ print(add3(1, c: 7))               // 1 + 10 + 7 = 18
         <li>Named arguments work for functions declared in the same module. Calls to imported functions, builtins, methods and constructors take positional arguments only; using names there is a compile error.</li>
       </ul>
       <pre><code>// note() records its tag and returns the value
-print(add3(c: note("c", 3), a: note("a", 1)))   // evaluates c then a; prints 1 + 10 + 3 = 113
+print(add3(c: note("c", 3), a: note("a", 1)))   // evaluates c, then a; prints 1 + 10 + 3 = 14
 </code></pre>
 
       <h2>Calling</h2>
