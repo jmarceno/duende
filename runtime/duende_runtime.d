@@ -101,8 +101,22 @@ void duende_dict_put(K, V)(V[K] dict, K key, V value) {
         dict[key] = value;
     } else {
         dict.remove(key);
-        update(dict, key, delegate V() { return value; }, delegate void(ref V slot) {});
+        static if (__VERSION__ >= 2112) {
+            update(dict, key, delegate V() { return value; }, delegate void(ref V slot) {});
+        } else {
+            // Before 2.112, druntime's update assigns into the new slot, which
+            // const members forbid. Ask the runtime for the slot and build it in place.
+            import core.lifetime : moveEmplace;
+            bool found;
+            auto slot = cast(V*) _aaGetX(cast(void**) &dict, typeid(V[K]), V.sizeof, &key, found);
+            moveEmplace(value, *slot);
+        }
     }
+}
+
+static if (__VERSION__ < 2112) {
+    private extern (C) void* _aaGetX(void** paa, const TypeInfo_AssociativeArray ti,
+        const size_t valsz, const scope void* pkey, out bool found) pure nothrow;
 }
 
 // `subject ? else fallback`
