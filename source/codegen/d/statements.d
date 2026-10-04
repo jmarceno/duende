@@ -286,10 +286,15 @@ mixin template DStatementsMixin() {
             returnType = "auto";
         }
 
-        if (funcDecl.name == "main" && funcDecl.returnType == DuendeType.INT) {
+        bool isIntMain = funcDecl.name == "main" && funcDecl.returnType == DuendeType.INT;
+        if (isIntMain) {
             returnType = "int";
         }
         currentFunctionReturnDType = returnType;
+        // Returns inside an int main become the process exit status (D's main must return int, Duende's int is long)
+        auto savedEmittingIntMain = emittingIntMain;
+        emittingIntMain = isIntMain;
+        scope(exit) emittingIntMain = savedEmittingIntMain;
 
         // If any parameter is 'auto', lift to a D template with concrete type params (T0, T1, ...)
         string[] templateTypeParams;
@@ -348,16 +353,10 @@ mixin template DStatementsMixin() {
             result ~= generateStatement(stmt);
         }
 
-        // Add implicit return 0 for main function that returns int
-        if (funcDecl.name == "main" && funcDecl.returnType == DuendeType.INT) {
-            bool hasReturnStatement = false;
-            foreach (stmt; funcDecl.body) {
-                if (cast(ReturnStatement)stmt) {
-                    hasReturnStatement = true;
-                    break;
-                }
-            }
-            if (!hasReturnStatement) {
+        // Falling off the end of an int main exits with status 0
+        if (isIntMain) {
+            bool endsWithReturn = funcDecl.body.length > 0 && cast(ReturnStatement)funcDecl.body[$-1] !is null;
+            if (!endsWithReturn) {
                 result ~= indent() ~ "return 0;\n";
             }
         }
@@ -380,7 +379,11 @@ mixin template DStatementsMixin() {
      */
     private string generateReturnStatement(ReturnStatement retStmt) {
         if (retStmt.value) {
-            return indent() ~ "return " ~ generateWithNode(currentFunctionReturnNode, currentFunctionReturnDType, retStmt.value) ~ ";\n";
+            string value = generateWithNode(currentFunctionReturnNode, currentFunctionReturnDType, retStmt.value);
+            if (emittingIntMain) {
+                return indent() ~ "return cast(int)(" ~ value ~ ");\n";
+            }
+            return indent() ~ "return " ~ value ~ ";\n";
         }
         return indent() ~ "return;\n";
     }
@@ -489,29 +492,10 @@ mixin template DStatementsMixin() {
     private string generateStructDeclaration(StructDeclaration structDecl) {
         auto result = appender!string();
 
-        // For structs implementing protocols, we need to generate a class wrapper
-        string[] interfaces;
-        if (structDecl.annotations) {
-            foreach (annotation; structDecl.annotations) {
-                if (annotation.name == "Implements" && annotation.arguments.length > 0) {
-                    interfaces ~= annotation.arguments;
-                }
-            }
-        }
-
-        if (interfaces.length > 0) {
-            // Generate as a class for interface implementation
-            frameTypes[structDecl.name] = structDecl.name; // Track as frame type since it's generated as class
-            result ~= "class " ~ structDecl.name;
-            result ~= " : ";
-            foreach (i, iface; interfaces) {
-                if (i > 0) result ~= ", ";
-                result ~= iface;
-            }
-            result ~= " {\n";
-        } else {
-            result ~= "struct " ~ structDecl.name ~ " {\n";
-        }
+        // A struct stays a D struct (a value) even when it implements protocols: conformance is
+        // static, checked by semantic analysis, and protocol default methods are mixed in below.
+        // Only frames become classes that implement the protocol's D interface.
+        result ~= "struct " ~ structDecl.name ~ " {\n";
         indentLevel++;
 
         // Generate immutable fields
@@ -622,7 +606,7 @@ mixin template DStatementsMixin() {
             foreach (annotation; frameDecl.annotations) {
                 if (annotation.name == "Implements" && annotation.arguments.length > 0) {
                     foreach (protocolName; annotation.arguments) {
-                        result ~= "\n" ~ indent() ~ "mixin " ~ protocolName ~ "_DefaultImpls;\n";
+                        result ~= "\n" ~ indent() ~ "mixin " ~ protocolName ~ "_FrameDefaultImpls;\n";
                     }
                 }
             }
@@ -703,7 +687,10 @@ mixin template DStatementsMixin() {
         result ~= "}\n";
 
         // Generate collective default implementations mixin
-        result ~= generateProtocolDefaultsMixin(protocolDecl);
+        // Struct methods are const (structs are immutable values); frame methods may mutate, so
+        // frames get their own copy of the defaults that can call their non-const methods
+        result ~= generateProtocolDefaultsMixin(protocolDecl, "_DefaultImpls", true);
+        result ~= generateProtocolDefaultsMixin(protocolDecl, "_FrameDefaultImpls", false);
 
         return result.data;
     }
@@ -711,23 +698,11 @@ mixin template DStatementsMixin() {
     /**
      * Generate default implementation mixins for protocols.
      */
-    private string generateProtocolDefaultsMixin(ProtocolDeclaration protocolDecl) {
+    private string generateProtocolDefaultsMixin(ProtocolDeclaration protocolDecl, string suffix, bool constMethods) {
         auto result = appender!string();
 
-        // Check if there are any default implementations
-        bool hasDefaults = false;
-        foreach (method; protocolDecl.methods) {
-            if (method.hasDefaultImplementation) {
-                hasDefaults = true;
-                break;
-            }
-        }
-
-        if (!hasDefaults) {
-            return "";
-        }
-
-        result ~= "\nmixin template " ~ protocolDecl.name ~ "_DefaultImpls() {\n";
+        // Emitted even without defaults so every implementer can mix it in unconditionally
+        result ~= "\nmixin template " ~ protocolDecl.name ~ suffix ~ "() {\n";
         indentLevel++;
 
         foreach (method; protocolDecl.methods) {
@@ -760,7 +735,7 @@ mixin template DStatementsMixin() {
                     result ~= " = " ~ generateExpected(defExpected, param.defaultValue);
                 }
             }
-            result ~= ") const {\n"; // Make default implementations const for immutable compatibility
+            result ~= constMethods ? ") const {\n" : ") {\n";
                 indentLevel++;
 
                 foreach (stmt; method.defaultBody) {

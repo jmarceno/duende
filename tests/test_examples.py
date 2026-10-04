@@ -54,6 +54,63 @@ class TestDuendeExamples:
         assert returncode == 0, f"Program failed: {stderr}"
         assert stdout.strip() == "55", f"Expected '55', got '{stdout.strip()}'"
 
+    def test_protocol_values_example(self):
+        """Protocol conformance keeps struct value semantics and frame reference semantics"""
+        source_file = self.examples_dir / "protocol_values.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        assert stdout.splitlines() == [
+            "plain equal copies: true",
+            "plain equal values: true",
+            "struct equal copies: true",
+            "struct equal values: true",
+            "struct grown is new: false",
+            "struct areas: 6 12",
+            "shape with area 6",
+            "frame shared update: 12",
+            "frame same object: true",
+            "frame equal fields, other object: false",
+            "shape with area 6",
+        ]
+
+    def test_match_guards_example(self):
+        """Guards see arm bindings; subject and guards are evaluated once per attempt"""
+        source_file = self.examples_dir / "match_guards.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        assert stdout.splitlines() == [
+            "big 250",
+            "positive 5",
+            "other 0",
+            "failed: negative: -3",
+            "subject calls: 4",
+            "guard calls: 5 (aabab)",
+            "outer x: -7",
+            "stop",
+            "slow",
+            "go",
+            "score 42",
+            "bound value 9",
+            "value after match: 1",
+        ]
+
+    def test_named_arguments_example(self):
+        """Named/positional arguments bind once and evaluate in source order"""
+        source_file = self.examples_dir / "named_arguments.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        assert stdout.splitlines() == [
+            "123", "cab",
+            "207", "xy",
+            "304", "zw",
+            "209",
+            "205",
+            "calls=7",
+        ]
+
     def test_basic_arithmetic_example(self):
         """Test the basic_arithmetic.du example"""
         source_file = self.examples_dir / "basic_arithmetic.du"

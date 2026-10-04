@@ -87,6 +87,16 @@ greet(name: "World")
 // Mixing positional and named is allowed; positionals fill first unfilled parameters
 print(add3(1, c: 7))               // 1 + 10 + 7 = 18
 </code></pre>
+      <p>How arguments bind:</p>
+      <ul>
+        <li>Named arguments bind to the parameter with that name; positional arguments then fill the remaining parameters from left to right, wherever they appear in the call.</li>
+        <li>Every argument must bind to exactly one parameter. An unknown name, the same name twice, or more positional arguments than free parameters is a compile error, as is leaving out a parameter that has no default.</li>
+        <li>Supplied arguments are evaluated exactly once, left to right in the order they are written, whatever parameter they bind to. Defaults for omitted parameters are evaluated after them.</li>
+        <li>Named arguments work for functions declared in the same module. Calls to imported functions, builtins, methods and constructors take positional arguments only; using names there is a compile error.</li>
+      </ul>
+      <pre><code>// note() records its tag and returns the value
+print(add3(c: note("c", 3), a: note("a", 1)))   // evaluates c, then a; prints 1 + 10 + 3 = 14
+</code></pre>
 
       <h2>Calling</h2>
       <pre><code>let int s = add(7, 8)

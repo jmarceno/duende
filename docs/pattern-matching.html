@@ -38,13 +38,37 @@ end
       <pre><code>match stat do
     ACTIVE if value &gt; 0 -> s = ACTIVE
     ACTIVE if value &lt; 0 -> return Error("Invalid value for active")
+    ACTIVE -> s = ACTIVE
     INACTIVE -> s = INACTIVE
     PENDING -> s = PENDING
 end
 </code></pre>
+      <p>A guard is a <code>bool</code> expression after <code>if</code>. It runs only when the arm's pattern matches, and it can use the arm's bindings:</p>
+      <pre><code>let int x = -7
+return match fetch(n) do
+    Ok(x) if x &gt; 100 -> "big ${x}"     // this x is the Ok payload, not the outer x
+    Ok(x) -> "small ${x}"
+    Error(msg) -> "failed: ${msg}"
+end
+</code></pre>
 
-      <h2>Enum coverage</h2>
-      <p>When matching an enum, cover all cases or include a default case; otherwise a compile error is emitted. See <a href="enums.html">Enums</a>.</p>
+      <h2>How a match runs</h2>
+      <ul>
+        <li>The subject is evaluated once, before any arm.</li>
+        <li>Arms are tried top to bottom. For each arm, the pattern is tested, then <code>Ok(x)</code>/<code>Error(e)</code> payloads are bound, then the guard runs.</li>
+        <li>The first arm whose pattern and guard both hold is the only arm that runs. Later guards are not evaluated.</li>
+        <li>A binding exists only inside its own arm (guard and body), and hides any outer variable with the same name there.</li>
+      </ul>
+
+      <h2>Coverage</h2>
+      <p>Arms with a guard never count toward coverage, because the guard may be false. A compile error is emitted when:</p>
+      <ul>
+        <li>a match on an <a href="enums.html">enum</a> leaves a value without an unguarded arm and has no <code>_</code> arm (statements and expressions);</li>
+        <li>a match on a <code>Result</code> is missing an unguarded <code>Ok(...)</code> or <code>Error(...)</code> arm and has no <code>_</code> arm (statements and expressions);</li>
+        <li>a match <em>expression</em> on any other type (int, string, Maybe, ...) has no unguarded <code>_</code> arm. A <code>bool</code> subject may instead cover <code>true</code> and <code>false</code>.</li>
+        <li>an arm can never run because earlier unguarded arms already match everything it could match, such as an arm after <code>_</code>.</li>
+      </ul>
+      <p>A match <em>statement</em> on an open type such as int or string may leave values unmatched; then no arm runs.</p>
 
       <h2>Regex pattern</h2>
       <pre><code>match email do

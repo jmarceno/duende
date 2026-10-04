@@ -1,0 +1,16 @@
+// The value returned from `int main` becomes the process exit status.
+// Running `duende -r examples/exit_status.du` exits with the same status.
+
+int checks_failed(int failures) do
+    print("checks failed: ${failures}")
+    return failures
+end
+
+int main() do
+    var int code = 20
+    code = code + 3
+    if checks_failed(code) > 0 do
+        return code
+    end
+    print("unreachable")
+end

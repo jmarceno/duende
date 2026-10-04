@@ -1,0 +1,38 @@
+// Named and positional arguments: every supplied argument is evaluated
+// exactly once, left to right in source order, whatever parameter it binds to.
+
+var string trace = ""
+var int calls = 0
+
+int note(string tag, int value) do
+    trace = "${trace}${tag}"
+    calls = calls + 1
+    return value
+end
+
+int add3(int a, int b = 10, int c = 5) do
+    return a * 100 + b * 10 + c
+end
+
+int main() do
+    // Reordered names: c, a, b are evaluated in that order, then placed by name
+    print(add3(c: note("c", 3), a: note("a", 1), b: note("b", 2)))
+    print(trace)
+    trace = ""
+
+    // Mixed: the positional argument fills the first parameter not named (a)
+    print(add3(note("x", 1), c: note("y", 7)))
+    print(trace)
+    trace = ""
+
+    // A named argument before a positional one is still evaluated first
+    print(add3(c: note("z", 4), note("w", 2)))
+    print(trace)
+    trace = ""
+
+    // Omitted parameters use their defaults
+    print(add3(c: 9, a: 1))
+    print(add3(1))
+
+    print("calls=${calls}")
+end

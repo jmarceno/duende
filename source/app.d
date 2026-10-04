@@ -88,7 +88,15 @@ class CompilerError : Exception {
 
 // Semantic error types are imported from duende.semantic
 
-void main(string[] args) {
+// Process exit status contract:
+//   0                 successful compilation (or --help / --emit-d / --ast / --tokens)
+//   EXIT_FAILURE (1)  the source could not be compiled (missing file, parse/semantic/backend error)
+//   EXIT_USAGE (2)    invalid invocation (unknown option, no source file)
+//   with -r           the exit status of the compiled program
+enum int EXIT_FAILURE = 1;
+enum int EXIT_USAGE = 2;
+
+int main(string[] args) {
     bool verbose = false;
     bool printAst = false;
     bool printTokens = false;
@@ -102,7 +110,9 @@ void main(string[] args) {
     // Preserve original argv for manual scans because getopt mutates args
     auto argv = args.dup;
 
-    auto helpInfo = getopt(
+    GetoptResult helpInfo;
+    try {
+    helpInfo = getopt(
         args,
         "verbose|v", "Enable verbose output", &verbose,
         "ast", "Print AST and exit", &printAst,
@@ -114,10 +124,15 @@ void main(string[] args) {
         "compiler", "D compiler to use: dmd (default) or ldc", &compilerChoice,
         "emit-d", "Generate D code and print module mappings, then exit", &emitD
     );
+    } catch (GetOptException e) {
+        stderr.writeln("Error: " ~ e.msg);
+        stderr.writeln("Use --help for more options");
+        return EXIT_USAGE;
+    }
 
     if (helpInfo.helpWanted) {
         defaultGetoptPrinter("Duende Compiler", helpInfo.options);
-        return;
+        return 0;
     }
 
     // Fallback parse for -o/--output regardless of position using the original argv
@@ -158,14 +173,14 @@ void main(string[] args) {
         if (args.length >= 2) sourceFile = args[1];
     }
     if (!sourceFile.length) {
-        writeln("Usage: duende [options] <source-file>");
-        writeln("Use --help for more options");
-        return;
+        stderr.writeln("Usage: duende [options] <source-file>");
+        stderr.writeln("Use --help for more options");
+        return EXIT_USAGE;
     }
 
     if (!exists(sourceFile)) {
         writefln("Error: Source file '%s' not found", sourceFile);
-        return;
+        return EXIT_FAILURE;
     }
 
     auto ui = new TermUI();
@@ -229,13 +244,13 @@ void main(string[] args) {
                 foreach (t; toks) {
                     writeln(t.line, ":", t.column, " ", t.type, " ", t.value);
                 }
-                return;
+                return 0;
             }
             if (printAst) {
                 auto ps2 = new Parser(toks);
                 auto prog2 = ps2.parse();
                 printProgram(prog2);
-                return;
+                return 0;
             }
         }
 
@@ -270,7 +285,7 @@ void main(string[] args) {
             foreach (moduleName, dPath; moduleDPaths) {
                 writefln("%s => %s", moduleName, dPath);
             }
-            return;
+            return 0;
         }
 
         // Decide build path: if providers declare dub deps, synthesize a temp dub project; else compile directly with dmd
@@ -307,6 +322,8 @@ void main(string[] args) {
         } else {
             executablePath = buildPath(outputDir, exeStem);
         }
+        // Never leave a stale binary behind: if this build fails, there must be no product to run
+        if (exists(executablePath)) remove(executablePath);
     auto helperSources = packages.collectHelperSources();
     auto providerDubDeps = packages.collectDubDeps();
     auto providerDubSubCfgs = packages.collectDubSubConfigs();
@@ -446,25 +463,29 @@ void main(string[] args) {
                 writeln("====================");
             }
 
-            auto runResult = execute([executablePath]);
+            // The program shares our stdin/stdout/stderr, and its exit status becomes ours
+            stdout.flush();
+            int status = wait(spawnProcess([executablePath]));
+            // A program killed by signal N is reported like a shell does: 128 + N
+            if (status < 0) status = 128 - status;
 
-            if (runResult.output.length > 0) {
-                write(runResult.output);
+            if (status != 0 && verbose) {
+                writefln("Program exited with code: %d", status);
             }
-
-            if (runResult.status != 0 && verbose) {
-                writefln("Program exited with code: %d", runResult.status);
-            }
+            return status;
         }
 
     } catch (CompilerError e) {
         ui.error("Error: " ~ e.msg);
+        return EXIT_FAILURE;
     } catch (Exception e) {
         ui.error("Internal error: " ~ e.msg);
         if (verbose) {
             ui.warn(e.toString());
         }
+        return EXIT_FAILURE;
     }
+    return 0;
 }
 
 // ---------------- Module system -----------------

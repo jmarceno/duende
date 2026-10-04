@@ -50,6 +50,7 @@ mixin template DExpressionsMixin() {
             return generateLiteral(literal);
         }
         if (auto variable = cast(VariableExpression)expr) {
+            if (auto renamed = variable.name in bindingRenames) return *renamed;
             return variable.name;
         }
         if (auto binary = cast(BinaryExpression)expr) {
@@ -224,71 +225,15 @@ mixin template DExpressionsMixin() {
      * This handles print, input, math functions, date/time functions, file I/O, etc.
      */
     private string generateCallExpression(CallExpression call) {
-        // If named arguments were used, attempt to reorder/expand based on known function signatures
-        Expression[] origArgs = call.arguments;
-        string[] origNames = call.argumentNames.length ? call.argumentNames : new string[call.arguments.length];
-        bool hasNamed = false;
-        foreach (n; origNames) { if (n.length) { hasNamed = true; break; } }
-        Expression[] args = origArgs;
-        bool namedMapped = false;
-        bool namedFellBack = false;
-        if (hasNamed) {
-            if (auto pList = call.name in functionSignatures) {
-                auto params = *pList;
-                Expression[] mapped;
-                mapped.length = params.length;
-                bool[] filled;
-                filled.length = params.length;
-                // First fill named
-                foreach (i, a; origArgs) {
-                    auto nm = origNames.length > i ? origNames[i] : "";
-                    if (!nm.length) continue;
-                    size_t idx = size_t.max;
-                    foreach (j, p; params) { if (p.name == nm) { idx = j; break; } }
-                    if (idx == size_t.max) {
-                        // Unknown name; fallback to original order
-                        mapped = origArgs; filled = null; namedFellBack = true; break;
-                    }
-                    mapped[idx] = a; filled[idx] = true;
-                }
-                if (filled.length) {
-                    // Then place remaining positionals into first unfilled slots, left-to-right
-                    size_t posi = 0;
-                    foreach (i, a; origArgs) {
-                        if (origNames.length > i && origNames[i].length) continue; // skip named
-                        while (posi < filled.length && filled[posi]) posi++; // find next unfilled
-                        if (posi < mapped.length) { mapped[posi] = a; filled[posi] = true; posi++; }
-                    }
-                    // Determine the highest index that must be emitted
-                    long lastNeeded = -1;
-                    foreach (i, f; filled) { if (f) lastNeeded = cast(long)i; }
-                    if (lastNeeded >= 0) {
-                        // Fill any gaps up to lastNeeded using defaults when available
-                        foreach (i; 0 .. cast(size_t)(lastNeeded + 1)) {
-                            if (!filled[i]) {
-                                auto def = params[i].defaultValue;
-                                if (def !is null) {
-                                    mapped[i] = def; filled[i] = true;
-                                } else {
-                                    // No default to fill; we cannot omit middle args in D. Fallback: keep original order.
-                                    mapped = origArgs; namedFellBack = true; lastNeeded = cast(long)origArgs.length - 1; break;
-                                }
-                            }
-                        }
-                        // Trim to lastNeeded+1
-                        Expression[] trimmed;
-                        trimmed.length = cast(size_t)(lastNeeded + 1);
-                        foreach (i; 0 .. trimmed.length) trimmed[i] = mapped[i];
-                        args = trimmed;
-                        if (!namedFellBack) namedMapped = true;
-                    } else {
-                        // No args actually provided? leave as-is
-                        args = origArgs;
-                    }
-                }
+        // Named arguments are placed by the shared binder (the same one semantic analysis validated)
+        if (call.argumentNames.canFind!(n => n.length > 0)) {
+            if (auto params = call.name in functionSignatures) {
+                return generateBoundCall(call, *params);
             }
         }
-        bool argsAligned = !hasNamed || namedMapped;
+        Expression[] args = call.arguments;
+        // Without names, arguments line up with parameters positionally
+        bool argsAligned = true;
         // safeCast(type, value) -> Result!T with strict conversion rules
         if (call.name == "safeCast") {
             if (call.arguments.length != 2) {
@@ -822,6 +767,79 @@ mixin template DExpressionsMixin() {
     }
 
     /**
+     * Generate a call to a module function whose arguments use names.
+     *
+     * Arguments are placed in parameter order. Supplied arguments are evaluated exactly once,
+     * left to right in source order, and defaults for skipped parameters are evaluated after
+     * them. When parameter order would evaluate side-effecting arguments in a different order,
+     * those arguments are first bound to temporaries in source order.
+     */
+    private string generateBoundCall(CallExpression call, Parameter[] params) {
+        auto binding = bindArguments(call.name, params, call.arguments.length, call.argumentNames);
+        // Semantic analysis reports binding errors before code generation runs
+        assert(binding.ok, "unbound arguments reached code generation for '" ~ call.name ~ "'");
+
+        // Emit up to the last supplied parameter; D fills trailing defaults itself
+        long lastNeeded = -1;
+        foreach (j, ai; binding.argForParam) if (ai >= 0) lastNeeded = cast(long)j;
+
+        // Documented evaluation order: supplied arguments by source index, then defaults by parameter index
+        bool needsTemps = false;
+        long prevKey = -1;
+        foreach (j; 0 .. cast(size_t)(lastNeeded + 1)) {
+            long ai = binding.argForParam[j];
+            Expression e = ai >= 0 ? call.arguments[ai] : params[j].defaultValue;
+            if (isEffectFreeArgument(e)) continue;
+            long key = ai >= 0 ? ai : cast(long)(call.arguments.length + j);
+            if (key < prevKey) { needsTemps = true; break; }
+            prevKey = key;
+        }
+
+        // Arguments are typed from the parameter they bind to
+        long[] paramForArg = new long[call.arguments.length];
+        foreach (j, ai; binding.argForParam) if (ai >= 0) paramForArg[ai] = cast(long)j;
+        string expectedFor(long j) {
+            return params[j].type == DuendeType.AUTO ? "" : renderParamType(params[j]);
+        }
+
+        string[] argCode;
+        argCode.length = call.arguments.length;
+        string temps;
+        if (needsTemps) {
+            int id = ++matchCounter;
+            foreach (i, a; call.arguments) {
+                string code = generateExpected(expectedFor(paramForArg[i]), a);
+                if (isEffectFreeArgument(a)) { argCode[i] = code; continue; }
+                string tmp = format("__du_arg_%s_%s", id, i);
+                temps ~= "auto " ~ tmp ~ " = " ~ code ~ "; ";
+                argCode[i] = tmp;
+            }
+        } else {
+            foreach (i, a; call.arguments) argCode[i] = generateExpected(expectedFor(paramForArg[i]), a);
+        }
+
+        string[] parts;
+        foreach (j; 0 .. cast(size_t)(lastNeeded + 1)) {
+            long ai = binding.argForParam[j];
+            parts ~= ai >= 0 ? argCode[ai] : generateExpected(expectedFor(j), params[j].defaultValue);
+        }
+        string direct = call.name ~ "(" ~ parts.join(", ") ~ ")";
+        if (!needsTemps) return direct;
+        return "(() { " ~ temps ~ "return " ~ direct ~ "; })()";
+    }
+
+    // Literals and plain variable reads cannot observe or cause side effects, so their evaluation order is free
+    private bool isEffectFreeArgument(Expression e) {
+        if (e is null) return true;
+        if (cast(LiteralExpression)e !is null) return true;
+        if (cast(VariableExpression)e !is null) return true;
+        if (cast(BytesLiteralExpression)e !is null) return true;
+        if (auto s = cast(StringInterpolationExpression)e) return s.expressions.length == 0;
+        if (auto u = cast(UnaryExpression)e) return (u.operator == "-" || u.operator == "+") && isEffectFreeArgument(u.operand);
+        return false;
+    }
+
+    /**
      * Generate print function calls.
      */
     private string generatePrintCall(CallExpression call) {
@@ -1338,6 +1356,10 @@ mixin template DExpressionsMixin() {
         auto result = appender!string();
         result ~= "(() {\n";
         indentLevel++;
+        // A return inside the closure returns from the closure, not from main
+        auto savedEmittingIntMain = emittingIntMain;
+        emittingIntMain = false;
+        scope(exit) emittingIntMain = savedEmittingIntMain;
         
         foreach (stmt; expr.statements) {
             result ~= generateStatement(stmt);

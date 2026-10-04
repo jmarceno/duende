@@ -61,10 +61,12 @@ print(dirExists(tmpDir))
       <pre><code>writeText(file1, "hello")
 match readText(file1) do
     Ok(txt) -> print(txt)
+    Error(err) -> print(err)
 end
 appendText(file1, "!")
 match readText(file1) do
     Ok(txt2) -> print(txt2)
+    Error(err) -> print(err)
 end
 
 writeLines(file2, ["a", "b", "c"])
@@ -76,18 +78,22 @@ let list&lt;string&gt; lines = readLines(file2) ? else []
 writeBytes(binf, data)
 match readBytes(binf) do
     Ok(b) -> print(b.length)
+    Error(err) -> print(err)
 end
 </code></pre>
 
       <h2>Metadata and listing</h2>
       <pre><code>match fileSize(file1) do
     Ok(sz) -> print(sz)
+    Error(err) -> print(err)
 end
 match getMetadata(file1) do
     Ok(meta) -> print(meta["size"]) // dict metadata
+    Error(err) -> print(err)
 end
 match listDir(tmpDir) do
     Ok(entries) -> print(entries.length)
+    Error(err) -> print(err)
 end
 </code></pre>
 

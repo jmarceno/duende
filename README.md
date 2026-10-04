@@ -183,6 +183,15 @@ dub build
 - `--tokens`: Print tokens and exit (for debugging)
 - `--help`: Show help message
 
+### Exit Status
+`duende` exits with a status automation can rely on:
+- `0`: the program compiled successfully (also for `--help`, `--emit-d`, `--ast` and `--tokens`)
+- `1`: the program could not be compiled (missing source file, parse, semantic or D backend error); no executable is left behind from an earlier build
+- `2`: invalid invocation (unknown option or no source file)
+- With `-r`, the exit status of the compiled program itself, with or without `-v`. The program shares the terminal's stdin, stdout and stderr.
+
+Inside a Duende program, `int main()` sets the exit status: `return 23` exits with 23, and reaching the end of `main` exits with 0.
+
 ### Example Commands
 
 **Development workflow with --emit-d:**
