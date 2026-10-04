@@ -1,0 +1,6 @@
+int main() do
+    let string text = "one
+two"
+    let int value = 9223372036854775808
+    return 0
+end

@@ -1,0 +1,4 @@
+int main() do
+    print(3 ? else 9)
+    return 0
+end

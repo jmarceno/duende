@@ -46,6 +46,8 @@ print(names.first ? else "") // "a"
 </code></pre>
       <p>A <code>let</code> whose value is not shared (<code>int</code>, <code>float</code>, <code>string</code>, <code>bool</code>, enum, struct, and other value types) is stored so the generated program cannot assign it again. A runtime initializer for that kind of global runs at startup, in source order, when no earlier statement or deferred <code>var</code> has to run first. If one does, the initializer stays in source order among the top-level statements and the compiler still rejects a later assignment. Lists, dicts, bytes, frames, and bindings whose type is still unresolved keep mutable storage because their contents, or the D representation, are not a frozen value. <code>let</code> still forbids rebinding those names.</p>
 
+      <p>The same type and mutability checks apply inside <code>elif</code> branches, deferred calls, and expressions passed to builtins such as <code>print</code>. A frame method that changes fields in a local initializer, match guard, or nested block is also a mutating method.</p>
+
       <h2>Global Variables</h2>
       <p>Variables declared outside of functions, frames, or structs are treated as <strong>global variables</strong>. They are accessible from any function, frame, or struct within the same module.</p>
       

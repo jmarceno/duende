@@ -167,8 +167,6 @@ class Lexer {
                 // Single-quoted string literal support
                 return stringSingle(startLine, startColumn);
             case '\n':
-                line++;
-                column = 1;
                 return Token(TokenType.NEWLINE, "\n", cast(int)startLine, cast(int)startColumn);
             case '(':
                 return Token(TokenType.LEFT_PAREN, "(", cast(int)startLine, cast(int)startColumn);
@@ -294,12 +292,6 @@ class Lexer {
         while (!atEnd()) {
             char ch = advance();
             value ~= ch;
-
-            if (ch == '\n') {
-                // Maintain accurate line/column for newlines inside block comments
-                line++;
-                column = 1;
-            }
 
             // Check for closing '*/'
             if (ch == '*' && !atEnd() && peek() == '/') {
@@ -524,8 +516,14 @@ class Lexer {
 
     private char advance() {
         if (atEnd()) return '\0';
-        column++;
-        return source[pos++];
+        char ch = source[pos++];
+        if (ch == '\n') {
+            line++;
+            column = 1;
+        } else {
+            column++;
+        }
+        return ch;
     }
 
     private char peek() {

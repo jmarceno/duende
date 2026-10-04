@@ -1,0 +1,4 @@
+int main() do
+    defer print(abs(-1))
+    return 0
+end

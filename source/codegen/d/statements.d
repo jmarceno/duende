@@ -160,7 +160,7 @@ mixin template DStatementsMixin() {
                 cast(PropertyExpression)varDecl.initializer is null &&
                 cast(IndexExpression)varDecl.initializer is null &&
                 cast(LiteralExpression)varDecl.initializer is null) { // Don't convert string literals
-                initExpr ~= ".to!string";
+                initExpr = "(" ~ initExpr ~ ").to!string";
             }
 
             if (varDecl.type == DuendeType.INT && cast(IndexExpression)varDecl.initializer !is null) {

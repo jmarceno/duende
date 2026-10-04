@@ -48,6 +48,8 @@ mixin template DImportsMixin() {
             }
         } else if (auto exprStmt = cast(ExpressionStatement)stmt) {
             analyzeExpressionImports(exprStmt.expression);
+        } else if (auto deferStmt = cast(DeferStatement)stmt) {
+            analyzeExpressionImports(deferStmt.call);
         } else if (auto retStmt = cast(ReturnStatement)stmt) {
             if (retStmt.value) {
                 analyzeExpressionImports(retStmt.value);
@@ -101,6 +103,7 @@ mixin template DImportsMixin() {
                 analyzeStatementImports(bodyStmt);
             }
         } else if (auto matchStmt = cast(MatchStatement)stmt) {
+            requiredImports["std.conv"] = true;
             analyzeExpressionImports(matchStmt.subject);
             foreach (c; matchStmt.cases) {
                 if (auto ep = cast(ExpressionPattern)c.pattern) {
@@ -262,6 +265,7 @@ mixin template DImportsMixin() {
         } else if (auto lambda = cast(LambdaExpression)expr) {
             analyzeExpressionImports(lambda.body);
         } else if (auto matchExpr = cast(MatchExpression)expr) {
+            requiredImports["std.conv"] = true;
             analyzeExpressionImports(matchExpr.subject);
             foreach (c; matchExpr.cases) {
                 if (auto ep = cast(ExpressionPattern)c.pattern) {
@@ -275,6 +279,17 @@ mixin template DImportsMixin() {
             requiredImports["std.conv"] = true;
             // int(float("NaN")) handling uses isNaN
             requiredImports["std.math"] = true;
+        } else if (auto rc = cast(ResultConstructorExpression)expr) {
+            analyzeExpressionImports(rc.value);
+        } else if (auto mc = cast(MaybeConstructorExpression)expr) {
+            analyzeExpressionImports(mc.value);
+        } else if (auto unwrap = cast(UnwrapExpression)expr) {
+            analyzeExpressionImports(unwrap.result);
+            analyzeExpressionImports(unwrap.defaultValue);
+        } else if (auto block = cast(TryBlockExpression)expr) {
+            foreach (stmt; block.statements) analyzeStatementImports(stmt);
+        } else if (auto panic = cast(PanicExpression)expr) {
+            analyzeExpressionImports(panic.message);
         }
     }
 

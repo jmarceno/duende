@@ -1,0 +1,8 @@
+frame Box() do
+    void bad() do
+        continue
+    end
+end
+int main() do
+    return 0
+end

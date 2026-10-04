@@ -621,11 +621,8 @@ class Parser {
             // Convert bytes literal content (string of chars) into int[] of byte values
             string s = previous().value;
             int[] vals;
-            foreach (dchar ch; s) {
-                int v = cast(int)ch;
-                if (v < 0) v = 0; if (v > 255) v = v & 0xFF;
-                vals ~= v;
-            }
+            // Preserve the source's UTF-8 bytes instead of truncating Unicode code points.
+            foreach (char ch; s) vals ~= cast(ubyte)ch;
             return new BytesLiteralExpression(vals);
         }
 
@@ -722,7 +719,7 @@ class Parser {
             consumeNewlines();
 
             while (!check(TokenType.END) && !atEnd()) {
-                statements ~= statement();
+                statements ~= statementWithContext(true);
                 consumeNewlines();
             }
 

@@ -33,6 +33,18 @@ else
 end
 </code></pre>
 
+      <p>Each <code>if</code>, <code>elif</code>, and <code>else</code> body has its own local scope. All branches are checked even when their conditions are constant.</p>
+
+      <h2>Block expressions with try</h2>
+      <p><code>try do ... end</code> currently evaluates a local block. It does not catch exceptions. A <code>return</code> inside this block returns its value from the block, not from the surrounding function. The block uses the type expected by its declaration, assignment, argument, or return; without that context its result is inferred. Names declared inside it remain local.</p>
+      <pre><code>let string greeting = try do
+    let string text = "hello"
+    return text.trim()
+end
+print(greeting) // hello
+</code></pre>
+      <p>A block expression starts a separate loop context. <code>break</code> and <code>continue</code> may target loops inside that block, but cannot target a loop surrounding it. Both statements are rejected outside a loop, including inside methods and <code>elif</code> branches.</p>
+
       <h2>While</h2>
       <pre><code>var int count = 1
 while count &lt; 5 do

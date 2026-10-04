@@ -1,0 +1,9 @@
+int main() do
+    for i in 0 .. 2 do
+        let int value = try do
+            break
+            return 1
+        end
+    end
+    return 0
+end

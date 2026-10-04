@@ -1,0 +1,8 @@
+import audit_imports_lib {answer as selected}
+import audit_imports_lib.*
+int main() do
+    print(selected)
+    print(answer)
+    print(audit_imports_lib.answer)
+    return 0
+end

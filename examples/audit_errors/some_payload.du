@@ -1,0 +1,4 @@
+int main() do
+    let Maybe<int> r = Some("bad")
+    return 0
+end

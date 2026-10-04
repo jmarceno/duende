@@ -1,0 +1,94 @@
+// Regression programs from the compiler audit. Every call count is observable.
+var int receiver_calls = 0
+var int index_calls = 0
+var int bytes_calls = 0
+var int needle_calls = 0
+var string trace = ""
+
+string text() do
+    receiver_calls = receiver_calls + 1
+    trace = trace + "t"
+    return "abcd"
+end
+
+int index() do
+    index_calls = index_calls + 1
+    trace = trace + "i"
+    return 1
+end
+
+bytes data() do
+    bytes_calls = bytes_calls + 1
+    trace = trace + "d"
+    return b"abcd"
+end
+
+bytes needle() do
+    needle_calls = needle_calls + 1
+    trace = trace + "n"
+    return b"bc"
+end
+
+int main() do
+    print(text().charAt(index()))
+    print(receiver_calls)
+    print(index_calls)
+    print(trace)
+    print(data().find(needle()))
+    print(bytes_calls)
+    print(needle_calls)
+    print(trace)
+    print(data().find(b"missing"))
+    print(bytes_calls)
+
+    let bytes raw = b"abc"
+    let string snapshot = fromBytes(raw)
+    raw[0] = 120
+    print(snapshot)
+    print(fromBytes(raw))
+    let list<bytes> mutable_bytes = ["abc".toBytes(), b"ABC".upper(), b"abc".lower()]
+    mutable_bytes[0][0] = 120
+    mutable_bytes[1][0] = 120
+    mutable_bytes[2][0] = 120
+    print(fromBytes(mutable_bytes[0]))
+    print(fromBytes(mutable_bytes[1]))
+    print(fromBytes(mutable_bytes[2]))
+    let bytes utf8 = b"café 😀"
+    print(utf8.length)
+    print(fromBytes(utf8))
+
+    let list<Maybe<float>> maybes = [Some(3), None]
+    let list<Result<int>> results = [Ok(4), Error("absent")]
+    let list<list<Maybe<int>>> nested = [[Some(5), None], []]
+    print(maybes[0] ? else 0.5)
+    print(maybes[1] ? else 0.5)
+    print(results[0] ? else -1)
+    print(results[1] ? else -1)
+    print(nested[0][0] ? else -1)
+    print(nested[0][1] ? else -1)
+    print(nested[1].length)
+    let auto inferred = Some(8)
+    print(inferred ? else -1)
+
+    let string greeting = try do
+        let string local = "hello"
+        return local.trim()
+    end
+    print(greeting)
+    let Result<int> wrapped = try do
+        return Error("missing")
+    end
+    print(wrapped ? else -1)
+    let int loop_value = try do
+        for i in 0 .. 3 do
+            if i == 1 do
+                continue
+            elif i == 2 do
+                break
+            end
+        end
+        return 12
+    end
+    print(loop_value)
+    return 0
+end

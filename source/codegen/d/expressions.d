@@ -103,7 +103,7 @@ mixin template DExpressionsMixin() {
             return generateBytesLiteral(bytes);
         }
         if (auto list = cast(ListLiteralExpression)expr) {
-            return generateListLiteral(list, expected);
+            return generateListLiteral(list, expected, expectedNode);
         }
         if (auto dict = cast(DictLiteralExpression)expr) {
             return generateDictLiteral(dict, expected, expectedNode);
@@ -130,7 +130,7 @@ mixin template DExpressionsMixin() {
             return generateUnwrapExpression(unwrap, expected);
         }
         if (auto tryBlock = cast(TryBlockExpression)expr) {
-            return generateTryBlockExpression(tryBlock);
+            return generateTryBlockExpression(tryBlock, expected, expectedNode);
         }
         if (auto panic = cast(PanicExpression)expr) {
             return generatePanicExpression(panic);
@@ -203,6 +203,7 @@ mixin template DExpressionsMixin() {
             if (leftIsBytes || rightIsBytes) {
                 return "(" ~ generateExpression(binary.left) ~ " ~ " ~ generateExpression(binary.right) ~ ")";
             }
+            return "duende_add(" ~ generateExpression(binary.left) ~ ", " ~ generateExpression(binary.right) ~ ")";
         }
         return "(" ~ generateExpression(binary.left) ~ " " ~
                binary.operator ~ " " ~ generateExpression(binary.right) ~ ")";
@@ -303,7 +304,7 @@ mixin template DExpressionsMixin() {
         // Encoding utility as free function: fromBytes(bytes) -> string
         if (call.name == "fromBytes") {
             if (call.arguments.length == 1) {
-                return "cast(string)(" ~ generateExpression(call.arguments[0]) ~ ")";
+                return "cast(string)((" ~ generateExpression(call.arguments[0]) ~ ").idup)";
             }
         }
 
@@ -951,8 +952,16 @@ mixin template DExpressionsMixin() {
     /**
      * Generate list literals (arrays in D).
      */
-    private string generateListLiteral(ListLiteralExpression list, string expected) {
+    private string generateListLiteral(ListLiteralExpression list, string expected, TypeNode expectedNode) {
         auto result = appender!string();
+        TypeNode elementNode;
+        string elementType;
+        if (expectedNode.present && expectedNode.base == DuendeType.LIST && expectedNode.args.length) {
+            elementNode = expectedNode.args[0];
+            elementType = toDTypeNode(elementNode);
+        } else if (expected.endsWith("[]")) {
+            elementType = expected[0 .. $-2];
+        }
 
         if (list.elements.length == 0) {
             string ty = "string[]";
@@ -963,7 +972,7 @@ mixin template DExpressionsMixin() {
         result ~= "[";
         foreach (i, element; list.elements) {
             if (i > 0) result ~= ", ";
-            result ~= generateExpression(element);
+            result ~= generateWithNode(elementNode, elementType, element);
         }
         result ~= "]";
         return result.data;
@@ -1146,10 +1155,10 @@ mixin template DExpressionsMixin() {
                 return "(" ~ obj ~ " == \"true\")";
             case "toBytes":
                 // Return a mutable byte slice from a string
-                return "cast(ubyte[])(cast(immutable(ubyte)[])" ~ obj ~ ")";
+                return "(cast(ubyte[])(cast(immutable(ubyte)[])(" ~ obj ~ "))).dup";
             case "fromBytes":
                 if (method.arguments.length == 1) {
-                    return "cast(string)(" ~ generateExpression(method.arguments[0]) ~ ")";
+                    return "cast(string)((" ~ generateExpression(method.arguments[0]) ~ ").idup)";
                 }
                 break;
             case "compare":
@@ -1198,7 +1207,7 @@ mixin template DExpressionsMixin() {
             case "charAt":
                 if (argsList.length == 1) {
                     auto i = generateExpression(argsList[0]);
-                    return obj ~ "[" ~ i ~ ".." ~ i ~ "+1]";
+                    return "duende_char_at(" ~ obj ~ ", " ~ i ~ ")";
                 }
                 break;
             case "charCodeAt":
@@ -1230,13 +1239,13 @@ mixin template DExpressionsMixin() {
             // Bytes APIs
             case "upper":
                 // ASCII uppercase using string helpers, return bytes
-                return "cast(ubyte[])(toUpper(cast(string)" ~ obj ~ "))";
+                return "(cast(ubyte[])(toUpper(cast(string)" ~ obj ~ "))).dup";
             case "lower":
-                return "cast(ubyte[])(toLower(cast(string)" ~ obj ~ "))";
+                return "(cast(ubyte[])(toLower(cast(string)" ~ obj ~ "))).dup";
             case "find":
                 if (argsList.length == 1) {
                     auto needle = generateExpression(argsList[0]);
-                    return "(() { import std.algorithm.searching : find; auto __r = find(" ~ obj ~ ", " ~ needle ~ "); return (__r.empty ? -1L : cast(long)(__r.ptr - " ~ obj ~ ".ptr)); })()";
+                    return "(() { import std.algorithm.searching : find; auto __du_data = " ~ obj ~ "; auto __du_needle = " ~ needle ~ "; auto __r = find(__du_data, __du_needle); return (__r.length == 0 ? -1L : cast(long)(__r.ptr - __du_data.ptr)); })()";
                 }
                 break;
             case "has":
@@ -1352,14 +1361,33 @@ mixin template DExpressionsMixin() {
     /**
      * Generate try block expressions.
      */
-    private string generateTryBlockExpression(TryBlockExpression expr) {
+    private string generateTryBlockExpression(TryBlockExpression expr, string expected, TypeNode expectedNode) {
         auto result = appender!string();
         result ~= "(() {\n";
         indentLevel++;
         // A return inside the closure returns from the closure, not from main
         auto savedEmittingIntMain = emittingIntMain;
+        auto savedReturnType = currentFunctionReturnType;
+        auto savedReturnInner = currentFunctionReturnInnerType;
+        auto savedReturnCustom = currentFunctionReturnCustomTypeName;
+        auto savedReturnNode = currentFunctionReturnNode;
+        auto savedReturnDType = currentFunctionReturnDType;
+        auto savedVariables = variableTypes.dup;
         emittingIntMain = false;
-        scope(exit) emittingIntMain = savedEmittingIntMain;
+        currentFunctionReturnType = expectedNode.present ? expectedNode.base : DuendeType.AUTO;
+        currentFunctionReturnInnerType = DuendeType.VOID;
+        currentFunctionReturnCustomTypeName = null;
+        currentFunctionReturnNode = expectedNode;
+        currentFunctionReturnDType = expected;
+        scope(exit) {
+            emittingIntMain = savedEmittingIntMain;
+            currentFunctionReturnType = savedReturnType;
+            currentFunctionReturnInnerType = savedReturnInner;
+            currentFunctionReturnCustomTypeName = savedReturnCustom;
+            currentFunctionReturnNode = savedReturnNode;
+            currentFunctionReturnDType = savedReturnDType;
+            variableTypes = savedVariables;
+        }
         
         foreach (stmt; expr.statements) {
             result ~= generateStatement(stmt);

@@ -42,6 +42,9 @@
     </li>
   </ul>
 
+  <p>String-to-bytes conversion creates writable storage. <code>fromBytes</code> creates a string snapshot, so changing the source bytes later does not change that string. <code>upper</code> and <code>lower</code> also return writable bytes, including when their result is stored directly in a collection. A bytes literal preserves the source's UTF-8 encoding: <code>b"é"</code> contains two bytes.</p>
+  <p><code>find</code> evaluates the receiver and needle once, in that order, and returns <code>-1</code> when the needle is absent.</p>
+
   <h2>Byte arrays</h2>
   <p>Duende has a built-in <code>bytes</code> type for binary data. You can create it from a list of numbers or with a bytes literal using the <code>b"..."</code> prefix.</p>
   <pre><code>let bytes data = [1, 2, 255]

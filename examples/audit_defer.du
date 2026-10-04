@@ -1,0 +1,5 @@
+int main() do
+    defer print("  deferred  ".trim())
+    print("body")
+    return 0
+end

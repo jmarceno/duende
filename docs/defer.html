@@ -23,6 +23,7 @@
   <main>
     <div class="container">
       <p><code>defer</code> schedules a function call to run when the current scope exits.</p>
+      <p>The deferred expression follows the same type, argument, import, and mutability rules as an ordinary expression. In particular, deferring a mutating frame method still requires a <code>var</code> receiver.</p>
       <pre><code>void exitPrint() do
     print("This should be the last thing to print")
 end

@@ -65,6 +65,8 @@ end
 take(Error("missing"))
 </code></pre>
 
+      <p>Typed list literals also provide this context, including nested lists: <code>let list&lt;Maybe&lt;float&gt;&gt; values = [Some(3), None]</code>. An inferred <code>Some</code> keeps its payload type. The compiler checks <code>Ok</code> and <code>Some</code> payloads against their expected types and requires an <code>Error</code> message to be a string. A known non-wrapper subject such as <code>3 ? else 9</code> is rejected.</p>
+
       <h2>One Result and one Maybe</h2>
       <p><code>Result</code> and <code>Maybe</code> are the same types in every module. A function in one file can return <code>Ok</code>, <code>Error</code>, <code>Some</code>, or <code>None</code>, and another file can store that value, pass it on, or unwrap it.</p>
 

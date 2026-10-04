@@ -1,0 +1,8 @@
+int main() do
+    if false do
+        print(0)
+    elif true do
+        break
+    end
+    return 0
+end

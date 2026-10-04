@@ -225,7 +225,7 @@ int main(string[] args) {
             // Set file path in source positions for this module
             string currentFile = info.sourcePath;
             
-            validateModuleSemantics(info, semanticErrors);
+            validateModuleSemantics(info, semanticErrors, graph.moduleQualifiers(info));
         }
         
         // If there are semantic errors, report them and exit
@@ -672,6 +672,28 @@ class ModuleGraph {
         return tried;
     }
 
+    // The same module aliases emitted by codegen must be visible during semantic traversal.
+    string[] moduleQualifiers(ModuleInfo info) {
+        string[] names;
+        foreach (imp; info.imports) {
+            string mod = imp.modulePath.join(".");
+            if (mod !in modules) {
+                auto parts = info.moduleName.split(".");
+                if (parts.length > 1) mod = parts[0 .. $-1].join(".") ~ "." ~ mod;
+            }
+            if (mod !in modules) continue;
+            names ~= imp.moduleAlias.length ? imp.moduleAlias : imp.modulePath[$-1];
+            foreach (item; imp.items)
+                names ~= item.localAlias.length ? item.localAlias : item.name;
+            if (imp.isWildcard) names ~= exportedSymbolsFrom(modules[mod].program);
+            foreach (reimp; modules[mod].imports) {
+                if (reimp.isPublic)
+                    names ~= reimp.moduleAlias.length ? reimp.moduleAlias : reimp.modulePath[$-1];
+            }
+        }
+        return names;
+    }
+
     // Per-module D code generation
     string generateModuleD(ModuleInfo info) {
     auto gen = new DCodeGenerator();
@@ -863,6 +885,7 @@ private string[] exportedSymbolsFrom(Program prog) {
     string[] syms;
     foreach (s; prog.statements) {
         if (auto f = cast(FunctionDeclaration)s) syms ~= f.name;
+        else if (auto v = cast(VariableDeclaration)s) syms ~= v.name;
         else if (auto st = cast(StructDeclaration)s) syms ~= st.name;
         else if (auto fr = cast(FrameDeclaration)s) syms ~= fr.name;
         else if (auto en = cast(EnumDeclaration)s) syms ~= en.name;
@@ -896,6 +919,12 @@ private void collectCallNames(Statement s, ref bool[string] names) {
             visitExpr(ie.object); visitExpr(ie.index);
         } else if (auto pe = cast(PropertyExpression)e) {
             visitExpr(pe.object);
+        } else if (auto ae = cast(AssignmentExpression)e) {
+            visitExpr(ae.value);
+        } else if (auto pa = cast(PropertyAssignmentExpression)e) {
+            visitExpr(pa.object); visitExpr(pa.value);
+        } else if (auto ia = cast(IndexAssignmentExpression)e) {
+            visitExpr(ia.object); visitExpr(ia.index); visitExpr(ia.value);
         } else if (auto le = cast(ListLiteralExpression)e) {
             foreach (el; le.elements) visitExpr(el);
         } else if (auto de = cast(DictLiteralExpression)e) {
@@ -911,24 +940,52 @@ private void collectCallNames(Statement s, ref bool[string] names) {
         } else if (auto te = cast(TryBlockExpression)e) {
             foreach (st; te.statements) collectCallNames(st, names);
         } else if (auto me2 = cast(MatchExpression)e) {
-            visitExpr(me2.subject); foreach (c; me2.cases) { visitExpr(c.value); }
+            visitExpr(me2.subject);
+            foreach (c; me2.cases) {
+                if (auto ep = cast(ExpressionPattern)c.pattern) visitExpr(ep.expr);
+                visitExpr(c.guard); visitExpr(c.value);
+            }
+        } else if (auto cc = cast(ConstructorCallExpression)e) {
+            foreach (a; cc.arguments) visitExpr(a);
+        } else if (auto ce = cast(CastExpression)e) {
+            visitExpr(ce.value);
+        } else if (auto le = cast(LambdaExpression)e) {
+            visitExpr(le.body);
+        } else if (auto pe = cast(PanicExpression)e) {
+            visitExpr(pe.message);
         }
     }
-    if (auto f = cast(FunctionDeclaration)s) { foreach (st; f.body) collectCallNames(st, names); }
+    if (auto vd = cast(VariableDeclaration)s) visitExpr(vd.initializer);
+    else if (auto f = cast(FunctionDeclaration)s) { foreach (st; f.body) collectCallNames(st, names); }
+    else if (auto sd = cast(StructDeclaration)s) {
+        foreach (fd; sd.fields) visitExpr(fd.defaultValue);
+        foreach (m; sd.methods) collectCallNames(m, names);
+    }
+    else if (auto fd = cast(FrameDeclaration)s) {
+        foreach (field; fd.fields) collectCallNames(field, names);
+        foreach (m; fd.methods) collectCallNames(m, names);
+    }
     else if (auto m = cast(MethodDeclaration)s) { foreach (st; m.body) collectCallNames(st, names); }
     else if (auto fs = cast(ForStatement)s) { visitExpr(fs.start); visitExpr(fs.end); foreach (st; fs.body) collectCallNames(st, names); }
     else if (auto fi = cast(ForInStatement)s) { visitExpr(fi.iterable); foreach (st; fi.body) collectCallNames(st, names); }
     else if (auto ws = cast(WhileStatement)s) { visitExpr(ws.condition); foreach (st; ws.body) collectCallNames(st, names); }
     else if (auto es = cast(ExpressionStatement)s) { visitExpr(es.expression); }
     else if (auto rs = cast(ReturnStatement)s) { visitExpr(rs.value); }
+    else if (auto ds = cast(DeferStatement)s) { visitExpr(ds.call); }
     else if (auto ifs = cast(IfStatement)s) {
         visitExpr(ifs.condition);
         foreach (st; ifs.thenBranch) collectCallNames(st, names);
+        foreach (el; ifs.elifClauses) {
+            visitExpr(el.condition);
+            foreach (st; el.body) collectCallNames(st, names);
+        }
         foreach (st; ifs.elseBranch) collectCallNames(st, names);
     }
     else if (auto ms = cast(MatchStatement)s) {
         visitExpr(ms.subject);
         foreach (c; ms.cases) {
+            if (auto ep = cast(ExpressionPattern)c.pattern) visitExpr(ep.expr);
+            visitExpr(c.guard);
             foreach (st; c.body) collectCallNames(st, names);
         }
     }
@@ -936,9 +993,9 @@ private void collectCallNames(Statement s, ref bool[string] names) {
 
 // ---------------- Semantic validation -----------------
 
-private void validateModuleSemantics(ModuleInfo info, SemanticErrorCollector errorCollector) {
+private void validateModuleSemantics(ModuleInfo info, SemanticErrorCollector errorCollector, string[] moduleQualifiers) {
     // Run modular analyzer (undefined vars, function calls, types)
-    analyzeModule(info.program, info.moduleName, info.sourcePath, errorCollector);
+    analyzeModule(info.program, info.moduleName, info.sourcePath, errorCollector, moduleQualifiers);
     // Run legacy checks preserved here
     validateBreakContinueUsage(info.program, info.moduleName, info.sourcePath, errorCollector);
     validateImportRequirements(info.program, info.moduleName, info.sourcePath, errorCollector);
@@ -1043,7 +1100,52 @@ private void validateDefaultParameters(Program program, string sourcePath, Seman
 }
 
 private void validateBreakContinueUsage(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector) {
-    void visitStmt(Statement s, int loopDepth) {
+    // Expressions can contain try closures at any depth. A closure starts its own loop context.
+    void delegate(Statement, int) visitStmt;
+    void visitExpr(Expression e, int loopDepth) {
+        if (e is null) return;
+        if (auto te = cast(TryBlockExpression)e) {
+            foreach (st; te.statements) visitStmt(st, 0);
+        } else if (auto be = cast(BinaryExpression)e) {
+            visitExpr(be.left, loopDepth); visitExpr(be.right, loopDepth);
+        } else if (auto ue = cast(UnaryExpression)e) visitExpr(ue.operand, loopDepth);
+        else if (auto ce = cast(CallExpression)e) {
+            foreach (a; ce.arguments) visitExpr(a, loopDepth);
+        } else if (auto me = cast(MethodCallExpression)e) {
+            visitExpr(me.object, loopDepth);
+            foreach (a; me.arguments) visitExpr(a, loopDepth);
+        } else if (auto ae = cast(AssignmentExpression)e) visitExpr(ae.value, loopDepth);
+        else if (auto pa = cast(PropertyAssignmentExpression)e) {
+            visitExpr(pa.object, loopDepth); visitExpr(pa.value, loopDepth);
+        } else if (auto ia = cast(IndexAssignmentExpression)e) {
+            visitExpr(ia.object, loopDepth); visitExpr(ia.index, loopDepth); visitExpr(ia.value, loopDepth);
+        } else if (auto ie = cast(IndexExpression)e) {
+            visitExpr(ie.object, loopDepth); visitExpr(ie.index, loopDepth);
+        } else if (auto pe = cast(PropertyExpression)e) visitExpr(pe.object, loopDepth);
+        else if (auto ll = cast(ListLiteralExpression)e) {
+            foreach (el; ll.elements) visitExpr(el, loopDepth);
+        } else if (auto dl = cast(DictLiteralExpression)e) {
+            foreach (i, key; dl.keys) { visitExpr(key, loopDepth); visitExpr(dl.values[i], loopDepth); }
+        } else if (auto se = cast(StringInterpolationExpression)e) {
+            foreach (ex; se.expressions) visitExpr(ex, loopDepth);
+        } else if (auto rc = cast(ResultConstructorExpression)e) visitExpr(rc.value, loopDepth);
+        else if (auto mc = cast(MaybeConstructorExpression)e) visitExpr(mc.value, loopDepth);
+        else if (auto ue = cast(UnwrapExpression)e) {
+            visitExpr(ue.result, loopDepth); visitExpr(ue.defaultValue, loopDepth);
+        } else if (auto cc = cast(ConstructorCallExpression)e) {
+            foreach (a; cc.arguments) visitExpr(a, loopDepth);
+        } else if (auto ce = cast(CastExpression)e) visitExpr(ce.value, loopDepth);
+        else if (auto le = cast(LambdaExpression)e) visitExpr(le.body, 0);
+        else if (auto pe = cast(PanicExpression)e) visitExpr(pe.message, loopDepth);
+        else if (auto me = cast(MatchExpression)e) {
+            visitExpr(me.subject, loopDepth);
+            foreach (c; me.cases) {
+                if (auto ep = cast(ExpressionPattern)c.pattern) visitExpr(ep.expr, loopDepth);
+                visitExpr(c.guard, loopDepth); visitExpr(c.value, loopDepth);
+            }
+        }
+    }
+    visitStmt = (Statement s, int loopDepth) {
         if (auto f = cast(FunctionDeclaration)s) {
             // Nested function is its own control-flow context; loopDepth resets
             foreach (st; f.body) visitStmt(st, 0);
@@ -1053,32 +1155,51 @@ private void validateBreakContinueUsage(Program program, string moduleName, stri
             foreach (st; m.body) visitStmt(st, 0);
             return;
         }
+        if (auto sd = cast(StructDeclaration)s) {
+            foreach (m; sd.methods) visitStmt(m, 0);
+            return;
+        }
+        if (auto fd = cast(FrameDeclaration)s) {
+            foreach (m; fd.methods) visitStmt(m, 0);
+            return;
+        }
+        if (auto vd = cast(VariableDeclaration)s) { visitExpr(vd.initializer, loopDepth); return; }
+        if (auto rs = cast(ReturnStatement)s) { visitExpr(rs.value, loopDepth); return; }
+        if (auto ds = cast(DeferStatement)s) { visitExpr(ds.call, loopDepth); return; }
         if (auto fs = cast(ForStatement)s) {
+            visitExpr(fs.start, loopDepth); visitExpr(fs.end, loopDepth);
             foreach (st; fs.body) visitStmt(st, loopDepth + 1);
             return;
         }
         if (auto fi = cast(ForInStatement)s) {
+            visitExpr(fi.iterable, loopDepth);
             foreach (st; fi.body) visitStmt(st, loopDepth + 1);
             return;
         }
         if (auto ws = cast(WhileStatement)s) {
+            visitExpr(ws.condition, loopDepth);
             foreach (st; ws.body) visitStmt(st, loopDepth + 1);
             return;
         }
         if (auto es = cast(ExpressionStatement)s) {
-            // Only TryBlockExpression contains nested statements we must analyze
-            if (auto te = cast(TryBlockExpression)es.expression) {
-                foreach (st; te.statements) visitStmt(st, loopDepth);
-            }
+            visitExpr(es.expression, loopDepth);
             return;
         }
         if (auto ifs = cast(IfStatement)s) {
+            visitExpr(ifs.condition, loopDepth);
             foreach (st; ifs.thenBranch) visitStmt(st, loopDepth);
+            foreach (el; ifs.elifClauses) {
+                visitExpr(el.condition, loopDepth);
+                foreach (st; el.body) visitStmt(st, loopDepth);
+            }
             foreach (st; ifs.elseBranch) visitStmt(st, loopDepth);
             return;
         }
         if (auto ms = cast(MatchStatement)s) {
+            visitExpr(ms.subject, loopDepth);
             foreach (c; ms.cases) {
+                if (auto ep = cast(ExpressionPattern)c.pattern) visitExpr(ep.expr, loopDepth);
+                visitExpr(c.guard, loopDepth);
                 foreach (st; c.body) visitStmt(st, loopDepth);
             }
             return;
@@ -1106,7 +1227,7 @@ private void validateBreakContinueUsage(Program program, string moduleName, stri
             return;
         }
         // Other statements: ok
-    }
+    };
 
     foreach (s; program.statements) visitStmt(s, 0);
 }

@@ -1,0 +1,19 @@
+frame Box() do
+    var int n = 1
+    void bump() do
+        this.n = this.n + 1
+    end
+    int hidden() do
+        let auto value = this.n = 9
+        return value
+    end
+end
+int main() do
+    let Box b = Box(1)
+    if false do
+        print(0)
+    elif true do
+        b.n = 9
+    end
+    return 0
+end

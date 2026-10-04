@@ -1,0 +1,13 @@
+int classify(int n) do
+    return match n do
+        1 -> 7
+        _ -> 9
+    end
+end
+int main() do
+    match 1 do
+        1 -> print(classify(1))
+        _ -> print(0)
+    end
+    return 0
+end

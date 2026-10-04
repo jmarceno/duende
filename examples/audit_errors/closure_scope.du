@@ -1,0 +1,8 @@
+int main() do
+    let int value = try do
+        let int inside = 1
+        return inside
+    end
+    print(inside)
+    return 0
+end

@@ -1,0 +1,8 @@
+int main() do
+    if false do
+        print(0)
+    elif true do
+        print(sha256("abc"))
+    end
+    return 0
+end

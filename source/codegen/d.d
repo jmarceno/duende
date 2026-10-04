@@ -87,10 +87,16 @@ class DCodeGenerator : CodeGenerator {
         }
 
         // Emit user module imports/aliases prior to std imports
+        bool[string] emittedImportLines;
         foreach (line; userModuleImports) {
+            if (line in emittedImportLines) continue;
+            emittedImportLines[line] = true;
             result ~= line ~ "\n";
         }
+        bool[string] emittedAliasLines;
         foreach (line; userAliasLines) {
+            if (line in emittedAliasLines) continue;
+            emittedAliasLines[line] = true;
             result ~= line ~ "\n";
         }
         if ((userModuleImports.length + userAliasLines.length) > 0) {

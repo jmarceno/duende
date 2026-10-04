@@ -182,7 +182,7 @@ class SemanticAnalyzer {
 		return null;
 	}
 
-	void analyzeModule(Program prog, string moduleName, string sourcePath, SemanticErrorCollector errs) {
+	void analyzeModule(Program prog, string moduleName, string sourcePath, SemanticErrorCollector errs, string[] moduleQualifiers = null) {
 		if (prog is null) return;
 		// Pass 1: collect functions and globals
 		foreach (s; prog.statements) {
@@ -209,6 +209,7 @@ class SemanticAnalyzer {
 		}
 		// Pass 2: analyze statements with a scope stack
 		ScopeEnv env;
+		foreach (name; moduleQualifiers) env.define(name, TypeNode.unknownType(), false);
 		// seed with globals
 		foreach (k, b; globals) env.define(k, b.type, b.mutable);
 		foreach (s; prog.statements) {
@@ -343,6 +344,10 @@ class SemanticAnalyzer {
 			visitExpr(es.expression, sourcePath, errs, env, depth + 1);
 			return;
 		}
+		if (auto ds = cast(DeferStatement)s) {
+			visitExpr(ds.call, sourcePath, errs, env, depth + 1);
+			return;
+		}
 		if (auto rs = cast(ReturnStatement)s) {
 			if (rs.value !is null && hasCurrentReturn && !isPermissive(currentReturn) && currentReturn.base != DuendeType.VOID) {
 				auto et = visitExpr(rs.value, sourcePath, errs, env, depth + 1, currentReturn);
@@ -361,6 +366,11 @@ class SemanticAnalyzer {
 			visitExpr(ifs.condition, sourcePath, errs, env, depth + 1);
 			auto thenScope = env.child();
 			foreach (st; ifs.thenBranch) visitStmt(st, sourcePath, errs, thenScope, depth + 1);
+			foreach (el; ifs.elifClauses) {
+				visitExpr(el.condition, sourcePath, errs, env, depth + 1);
+				auto elifScope = env.child();
+				foreach (st; el.body) visitStmt(st, sourcePath, errs, elifScope, depth + 1);
+			}
 			auto elseScope = env.child();
 			foreach (st; ifs.elseBranch) visitStmt(st, sourcePath, errs, elseScope, depth + 1);
 			return;
@@ -766,10 +776,15 @@ class SemanticAnalyzer {
 		}
 		if (auto rc = cast(ResultConstructorExpression)e) {
 			TypeNode innerExp;
-			if (expected.present && expected.base == DuendeType.RESULT && expected.args.length)
+			if (rc.isOk && expected.present && expected.base == DuendeType.RESULT && expected.args.length)
 				innerExp = expected.args[0];
 			auto vt = visitExpr(rc.value, sourcePath, errs, env, depth + 1, innerExp);
+			if (rc.isOk && innerExp.present && !typeCompatible(innerExp, vt))
+				errs.addError("Ok payload type does not match (need=" ~ innerExp.describe() ~ ", got=" ~ vt.describe() ~ ")", getExprPos(rc.value, sourcePath));
+			if (!rc.isOk && !isPermissive(vt) && vt.base != DuendeType.STRING)
+				errs.addError("Error message must be a string", getExprPos(rc.value, sourcePath));
 			if (expected.present && expected.base == DuendeType.RESULT) return expected;
+			if (!rc.isOk) return TypeNode.generic(DuendeType.RESULT, [typeInfo(DuendeType.STRING)]);
 			if (!isPermissive(vt)) return TypeNode.generic(DuendeType.RESULT, [vt]);
 			return typeInfo(DuendeType.RESULT);
 		}
@@ -777,18 +792,42 @@ class SemanticAnalyzer {
 			TypeNode innerExp;
 			if (expected.present && expected.base == DuendeType.MAYBE && expected.args.length)
 				innerExp = expected.args[0];
-			if (mc.value !is null) visitExpr(mc.value, sourcePath, errs, env, depth + 1, innerExp);
+			TypeNode vt;
+			if (mc.value !is null) {
+				vt = visitExpr(mc.value, sourcePath, errs, env, depth + 1, innerExp);
+				if (innerExp.present && !typeCompatible(innerExp, vt))
+					errs.addError("Some payload type does not match (need=" ~ innerExp.describe() ~ ", got=" ~ vt.describe() ~ ")", getExprPos(mc.value, sourcePath));
+			}
 			if (expected.present && expected.base == DuendeType.MAYBE) return expected;
+			if (mc.isSome && !isPermissive(vt)) return TypeNode.generic(DuendeType.MAYBE, [vt]);
+			if (!mc.isSome) return TypeNode.generic(DuendeType.MAYBE, [typeInfo(DuendeType.STRING)]);
 			return typeInfo(DuendeType.MAYBE);
 		}
 		if (auto ue2 = cast(UnwrapExpression)e) {
-			visitExpr(ue2.result, sourcePath, errs, env, depth + 1);
-			visitExpr(ue2.defaultValue, sourcePath, errs, env, depth + 1);
-			return typeInfo(DuendeType.AUTO);
+			auto subject = visitExpr(ue2.result, sourcePath, errs, env, depth + 1);
+			if (!isPermissive(subject) && subject.base != DuendeType.RESULT && subject.base != DuendeType.MAYBE)
+				errs.addError("? else requires a Result or Maybe subject", getExprPos(ue2.result, sourcePath));
+			return visitExpr(ue2.defaultValue, sourcePath, errs, env, depth + 1, expected);
 		}
 		if (auto te = cast(TryBlockExpression)e) {
-			foreach (st; te.statements) visitStmt(st, sourcePath, errs, env, depth + 1);
-			return typeInfo(DuendeType.AUTO);
+			auto child = env.child();
+			auto savedReturn = currentReturn;
+			bool savedHas = hasCurrentReturn;
+			string savedName = currentFunctionName;
+			scope(exit) {
+				currentReturn = savedReturn;
+				hasCurrentReturn = savedHas;
+				currentFunctionName = savedName;
+			}
+			currentReturn = expected.present ? expected : TypeNode.unknownType();
+			hasCurrentReturn = true;
+			currentFunctionName = "try block";
+			foreach (st; te.statements) visitStmt(st, sourcePath, errs, child, depth + 1);
+			return currentReturn;
+		}
+		if (auto pe = cast(PanicExpression)e) {
+			visitExpr(pe.message, sourcePath, errs, env, depth + 1);
+			return typeInfo(DuendeType.INT);
 		}
 		if (auto cc = cast(ConstructorCallExpression)e) {
 			foreach (a; cc.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
@@ -933,6 +972,7 @@ class SemanticAnalyzer {
 	// mut is null when looking for direct field writes. Otherwise also follow this.method calls.
 	private bool stmtWritesThis(Statement s, bool[string] mut) {
 		if (s is null) return false;
+		if (auto vd = cast(VariableDeclaration)s) return exprWritesThis(vd.initializer, mut);
 		if (auto es = cast(ExpressionStatement)s) return exprWritesThis(es.expression, mut);
 		if (auto rs = cast(ReturnStatement)s) return exprWritesThis(rs.value, mut);
 		if (auto ds = cast(DeferStatement)s) return exprWritesThis(ds.call, mut);
@@ -963,7 +1003,11 @@ class SemanticAnalyzer {
 		}
 		if (auto ms = cast(MatchStatement)s) {
 			if (exprWritesThis(ms.subject, mut)) return true;
-			foreach (c; ms.cases) foreach (st; c.body) if (stmtWritesThis(st, mut)) return true;
+			foreach (c; ms.cases) {
+				if (auto ep = cast(ExpressionPattern)c.pattern) if (exprWritesThis(ep.expr, mut)) return true;
+				if (exprWritesThis(c.guard, mut)) return true;
+				foreach (st; c.body) if (stmtWritesThis(st, mut)) return true;
+			}
 			return false;
 		}
 		if (auto f = cast(FunctionDeclaration)s) {
@@ -1009,6 +1053,27 @@ class SemanticAnalyzer {
 		if (auto cc = cast(ConstructorCallExpression)e) {
 			foreach (a; cc.arguments) if (exprWritesThis(a, mut)) return true;
 			return false;
+		}
+		if (auto rc = cast(ResultConstructorExpression)e) return exprWritesThis(rc.value, mut);
+		if (auto mc = cast(MaybeConstructorExpression)e) return exprWritesThis(mc.value, mut);
+		if (auto ue = cast(UnwrapExpression)e) return exprWritesThis(ue.result, mut) || exprWritesThis(ue.defaultValue, mut);
+		if (auto ce = cast(CastExpression)e) return exprWritesThis(ce.value, mut);
+		if (auto pe = cast(PanicExpression)e) return exprWritesThis(pe.message, mut);
+		if (auto ll = cast(ListLiteralExpression)e) {
+			foreach (el; ll.elements) if (exprWritesThis(el, mut)) return true;
+		}
+		if (auto dl = cast(DictLiteralExpression)e) {
+			foreach (i, key; dl.keys) if (exprWritesThis(key, mut) || exprWritesThis(dl.values[i], mut)) return true;
+		}
+		if (auto te = cast(TryBlockExpression)e) {
+			foreach (st; te.statements) if (stmtWritesThis(st, mut)) return true;
+		}
+		if (auto me = cast(MatchExpression)e) {
+			if (exprWritesThis(me.subject, mut)) return true;
+			foreach (c; me.cases) {
+				if (auto ep = cast(ExpressionPattern)c.pattern) if (exprWritesThis(ep.expr, mut)) return true;
+				if (exprWritesThis(c.guard, mut) || exprWritesThis(c.value, mut)) return true;
+			}
 		}
 		return false;
 	}
@@ -1215,11 +1280,8 @@ class SemanticAnalyzer {
 					errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': named arguments require a function declared in this module", getExprPos(ce.arguments[i], sourcePath));
 				}
 			}
-			// The callee is unknown here (builtin or provider), but direct calls in its arguments,
-			// such as print(f(x: 1)), still need their arguments bound and checked
-			foreach (arg; ce.arguments) {
-				if (cast(CallExpression)arg !is null) visitExpr(arg, sourcePath, errs, env, depth + 1);
-			}
+			// Builtins and provider calls still evaluate every argument expression.
+			foreach (arg; ce.arguments) visitExpr(arg, sourcePath, errs, env, depth + 1);
 			return;
 		}
 		auto f = functions[ce.name];
@@ -1250,9 +1312,7 @@ class SemanticAnalyzer {
 }
 
 // Public entrypoint used by the compiler
-void analyzeModule(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector) {
+void analyzeModule(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector, string[] moduleQualifiers = null) {
 	auto analyzer = new SemanticAnalyzer();
-	analyzer.analyzeModule(program, moduleName, sourcePath, errorCollector);
+	analyzer.analyzeModule(program, moduleName, sourcePath, errorCollector, moduleQualifiers);
 }
-
-

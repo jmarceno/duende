@@ -1,0 +1,4 @@
+int main() do
+    let Result<int> r = Error(3)
+    return 0
+end

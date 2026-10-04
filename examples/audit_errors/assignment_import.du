@@ -1,0 +1,5 @@
+int main() do
+    var int value = 1
+    value = abs(-1)
+    return 0
+end

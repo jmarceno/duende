@@ -3,6 +3,22 @@ module duende_runtime;
 import std.conv : to;
 import std.stdio : writeln;
 
+// String addition is concatenation; numeric addition keeps D's native result type.
+auto duende_add(L, R)(L left, R right) {
+    static if (is(L : const(char)[]) && is(R : const(char)[]))
+        return left ~ right;
+    else static if (is(L : const(ubyte)[]) && is(R : const(ubyte)[]))
+        return left ~ right;
+    else
+        return left + right;
+}
+
+// A character here is a one-byte string slice. Evaluate the index only once.
+string duende_char_at(string text, long index) {
+    auto start = cast(size_t) index;
+    return text[start .. start + 1];
+}
+
 // One Result and one Maybe for every generated module.
 // Importing this module is what keeps wrapper values the same type across source files.
 

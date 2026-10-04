@@ -1,0 +1,15 @@
+frame Box() do
+    var int n = 1
+    void bump() do
+        this.n = this.n + 1
+    end
+    int hidden() do
+        let auto value = this.n = 9
+        return value
+    end
+end
+int main() do
+    let Box b = Box(1)
+    defer b.bump()
+    return 0
+end
