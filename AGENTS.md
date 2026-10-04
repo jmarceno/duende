@@ -1,4 +1,5 @@
 **ALWAYS UPDATE `docs` when making changes to the language that affect its user facing behavior.**
+**DO NOT UPDATE THIS FILE IT IS NOT DOCUMENTATION**
 
 # Duende
 
@@ -28,10 +29,6 @@ A test compiles this compiler, compiles a Duende program, runs the binary, and c
 When a program must be rejected, the check is the compiler diagnostic from that compile.
 
 **Unit tests are forbidden, the only tests are end-to-end program assertions.**
-
-## Bindings
-
-`let` freezes the name. `var` may be assigned again. The same rule applies to annotated and inferred locals, to globals, and to lists, dicts, and bytes: those values can still be updated in place. Structs are declared with `let` and their methods return new values. A frame method that writes fields requires a `var` receiver. Parameters are reassignable locals. Loop and match names are not.
 
 ## Changes
 
