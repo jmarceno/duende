@@ -27,8 +27,11 @@ class DCodeGenerator : CodeGenerator {
     private DuendeType currentFunctionReturnInnerType = DuendeType.VOID; // Track inner type
     private string currentFunctionReturnCustomTypeName; // Track custom inner type name when returning generics
     private TypeNode currentFunctionReturnNode; // Nested generic return type, when parsed
-    private struct VarInfo { DuendeType type; string custom; DuendeType inner; string innerCustom; }
+    private string currentFunctionReturnDType; // D spelling of the current function return, used as constructor context
+    private struct VarInfo { DuendeType type; string custom; DuendeType inner; string innerCustom; string dType; }
     private VarInfo[string] variableTypes; // Track variable types in current function scope
+    private VarInfo[string] globalVarTypes; // Module-level names, restored at each function
+    private string exprExpectedType; // D type expected of the expression currently being generated
     // Optional function/method signature registry to support named-args reordering at call sites
     private Parameter[][string] functionSignatures; // name -> params
     private Parameter[][string] methodSignatures;   // Type.method -> params (future)
@@ -63,6 +66,9 @@ class DCodeGenerator : CodeGenerator {
         if (moduleName.length) {
             result ~= "module " ~ moduleName ~ ";\n\n";
         }
+
+        // Result and Maybe live in one runtime module so every source file shares the type.
+        result ~= "import duende_runtime;\n\n";
 
         // Pre-scan declarations to collect type information needed by expression codegen
         // so that calls like customer(...) for frames are emitted as `new customer(...)`
@@ -124,10 +130,6 @@ class DCodeGenerator : CodeGenerator {
             result ~= "}\n\n";
         }
 
-        // Generate Result and Maybe types
-        result ~= generateResultAndMaybeTypes();
-        result ~= "\n";
-
         // Generate date/time helpers only if needed
         if ("std.datetime.systime" in requiredImports) {
             result ~= generateDateTimeHelpers();
@@ -143,17 +145,6 @@ class DCodeGenerator : CodeGenerator {
             result ~= generateStdMathHelpers();
             result ~= "\n";
         }
-
-        // Helper to evaluate expression statements for values like Result/Maybe
-        result ~= "void duende_eval(T)(T value) {\n";
-        result ~= "    static if (__traits(hasMember, T, \"isOk\")) {\n";
-        result ~= "        if (value.isOk) writeln(value.value); else writeln(value.errorMessage);\n";
-        result ~= "    } else static if (__traits(hasMember, T, \"isSome\")) {\n";
-        result ~= "        if (value.isSome) writeln(value.value); else {}\n";
-        result ~= "    } else {\n";
-        result ~= "        // No-op for other types; keep side-effects if any\n";
-        result ~= "    }\n";
-        result ~= "}\n\n";
 
         Statement[] nonFunctionStatements; // kept for potential future use (not used for main emission anymore)
 
@@ -216,6 +207,9 @@ class DCodeGenerator : CodeGenerator {
         if (!hasMain && !isLibraryModule) {
             result ~= "\nvoid main(string[] __argv) {\n";
             indentLevel++;
+            variableTypes = globalVarTypes.dup;
+            currentFunctionReturnType = DuendeType.VOID;
+            currentFunctionReturnDType = "";
             // Capture argv (excluding program name) for built-in args()
             result ~= indent() ~ "if (__argv.length > 1) DUENDE_ARGS = __argv[1 .. $]; else DUENDE_ARGS = [];\n";
             // Perform deferred global initializations interleaved with other top-level statements in source order

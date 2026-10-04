@@ -141,139 +141,87 @@ mixin template DTypeMixin() {
     }
 
     /**
-     * Generate the Result and Maybe type definitions for D code.
-     * These are generic types used for error handling and null safety.
+     * Payload type of Result!(T) or Maybe!(T). Empty when expected is some other type.
      */
-    private string generateResultAndMaybeTypes() {
-        return q"[
-// Result type for error handling
-struct Result(T) {
-    private bool _isOk;
-    private T _value;
-    private string _errorMsg;
-
-    static Result!T ok(T value) {
-        Result!T result;
-        result._isOk = true;
-        result._value = value;
-        return result;
-    }
-
-    static Result!T error(string err) {
-        Result!T result;
-        result._isOk = false;
-        result._errorMsg = err;
-        return result;
-    }
-
-    @property bool isOk() const { return _isOk; }
-    @property bool isError() const { return !_isOk; }
-    @property inout(T) value() inout { return _value; }
-    @property string errorMessage() const { return _errorMsg; }
-}
-
-// Maybe type for null safety
-struct Maybe(T) {
-    private bool _isSome;
-    private T _value;
-
-    static Maybe!T some(T value) {
-        Maybe!T result;
-        result._isSome = true;
-        result._value = value;
-        return result;
-    }
-
-    static Maybe!T none() {
-        Maybe!T result;
-        result._isSome = false;
-        return result;
-    }
-
-    @property bool isSome() const { return _isSome; }
-    @property bool isNone() const { return !_isSome; }
-    @property T value() const { return _value; }
-}
-
-// Helper functions for creating Results
-auto duende_ok(T)(T value) {
-    return Result!T.ok(value);
-}
-
-auto duende_error(T)(string err) {
-    return Result!T.error(err);
-}
-
-// Helper template for unwrapping values: returns the same type as the default value
-auto unwrapValue(R, T)(R result, T defaultValue) {
-    static if (__traits(hasMember, R, "isOk")) {
-        return result.isOk ? result.value.to!T : defaultValue;
-    } else static if (__traits(hasMember, R, "isSome")) {
-        return result.isSome ? result.value.to!T : defaultValue;
-    } else {
-        return defaultValue;
-    }
-}
-]";
+    private string wrapperInner(string expected, string ctor) {
+        if (!expected.length) return "";
+        string prefix = ctor ~ "!(";
+        if (expected.length <= prefix.length + 1) return "";
+        if (expected[0 .. prefix.length] != prefix) return "";
+        if (expected[$-1] != ')') return "";
+        string inner = expected[prefix.length .. $-1];
+        if (!inner.length || inner == "auto" || inner == "void") return "";
+        return inner;
     }
 
     /**
-     * Generate Result constructor expressions.
-     * Handles both ok and error cases, with context-aware type inference.
+     * Type used for Ok/Error or Some/None.
+     * The immediate expected type wins. A Result or Maybe function return is the backup
+     * so an untyped constructor inside that function still matches the return.
+     * With no context, Error is Result!(string) and None is Maybe!(string).
      */
-    private string generateResultConstructor(ResultConstructorExpression expr) {
+    private string constructorPayload(string expected, string ctor) {
+        string inner = wrapperInner(expected, ctor);
+        if (!inner.length) inner = wrapperInner(currentFunctionReturnDType, ctor);
+        return inner;
+    }
+
+    /**
+     * Ok/Some with no surrounding wrapper type.
+     * An int literal is Duende's signed 64-bit int, not D's 32-bit int.
+     * Any other payload is evaluated once and the wrapper uses that value's type.
+     */
+    private string inferSuccessWrapper(string ctor, string factory, Expression value) {
+        if (auto lit = cast(LiteralExpression)value) {
+            if (lit.type == DuendeType.INT)
+                return ctor ~ "!long." ~ factory ~ "(" ~ generateLiteral(lit) ~ ")";
+            if (lit.type == DuendeType.FLOAT)
+                return ctor ~ "!double." ~ factory ~ "(" ~ generateLiteral(lit) ~ ")";
+        }
+        string once = generateExpression(value);
+        return "(() { auto __du_payload = " ~ once ~ "; return " ~ ctor ~ "!(typeof(__du_payload))." ~ factory ~ "(__du_payload); })()";
+    }
+
+    /**
+     * Generate Result constructor expressions from the surrounding type.
+     */
+    private string generateResultConstructor(ResultConstructorExpression expr, string expected = "") {
+        string payloadType = constructorPayload(expected, "Result");
         if (expr.isOk) {
-            return "Result!(typeof(" ~ generateExpression(expr.value) ~ ")).ok(" ~ generateExpression(expr.value) ~ ")";
-        } else {
-            // Use the current function's return type context
-            if (currentFunctionReturnType == DuendeType.RESULT) {
-                string innerTypeName;
-                if (currentFunctionReturnNode.present && currentFunctionReturnNode.args.length)
-                    innerTypeName = toDTypeNode(currentFunctionReturnNode.args[0]);
-                else if (currentFunctionReturnCustomTypeName && currentFunctionReturnCustomTypeName.length)
-                    innerTypeName = currentFunctionReturnCustomTypeName;
-                else
-                    innerTypeName = toDTypeSimple(currentFunctionReturnInnerType);
-                return "Result!(" ~ innerTypeName ~ ").error(" ~ generateExpression(expr.value) ~ ")";
-            } else {
-                // Fallback to string for non-function contexts
-                return "Result!(string).error(" ~ generateExpression(expr.value) ~ ")";
-            }
+            if (payloadType.length)
+                return "Result!(" ~ payloadType ~ ").ok(" ~ generateExpected(payloadType, expr.value) ~ ")";
+            return inferSuccessWrapper("Result", "ok", expr.value);
         }
+        string err = generateExpression(expr.value);
+        if (payloadType.length)
+            return "Result!(" ~ payloadType ~ ").error(" ~ err ~ ")";
+        return "Result!(string).error(" ~ err ~ ")";
     }
 
     /**
-     * Generate Maybe constructor expressions.
-     * Handles both Some and None cases, with context-aware type inference.
+     * Generate Maybe constructor expressions from the surrounding type.
      */
-    private string generateMaybeConstructor(MaybeConstructorExpression expr) {
+    private string generateMaybeConstructor(MaybeConstructorExpression expr, string expected = "") {
+        string payloadType = constructorPayload(expected, "Maybe");
         if (expr.isSome) {
-            return "Maybe!(typeof(" ~ generateExpression(expr.value) ~ ")).some(" ~ 
-                   generateExpression(expr.value) ~ ")";
-        } else {
-            // Use the current function's return type context for None
-            if (currentFunctionReturnType == DuendeType.MAYBE) {
-                string innerTypeName;
-                if (currentFunctionReturnNode.present && currentFunctionReturnNode.args.length)
-                    innerTypeName = toDTypeNode(currentFunctionReturnNode.args[0]);
-                else if (currentFunctionReturnCustomTypeName && currentFunctionReturnCustomTypeName.length)
-                    innerTypeName = currentFunctionReturnCustomTypeName;
-                else
-                    innerTypeName = toDTypeSimple(currentFunctionReturnInnerType);
-                return "Maybe!(" ~ innerTypeName ~ ").none()";
-            } else {
-                return "Maybe!string.none()";
-            }
+            if (payloadType.length)
+                return "Maybe!(" ~ payloadType ~ ").some(" ~ generateExpected(payloadType, expr.value) ~ ")";
+            return inferSuccessWrapper("Maybe", "some", expr.value);
         }
+        if (payloadType.length)
+            return "Maybe!(" ~ payloadType ~ ").none()";
+        return "Maybe!(string).none()";
     }
 
     /**
-     * Generate unwrap expressions for Result/Maybe types.
-     * Provides safe access to wrapped values with defaults.
+     * `subject ? else fallback`.
+     * Subject runs once. Fallback is generated in the type expected of this expression
+     * and is evaluated by duende_unwrap only on Error or None.
      */
-    private string generateUnwrapExpression(UnwrapExpression expr) {
-        return "unwrapValue(" ~ generateExpression(expr.result) ~ ", " ~ 
-               generateExpression(expr.defaultValue) ~ ")";
+    private string generateUnwrapExpression(UnwrapExpression expr, string expected = "") {
+        string subject = generateExpression(expr.result);
+        string fallback = generateExpected(expected, expr.defaultValue);
+        return "duende_unwrap(" ~ subject ~ ", " ~ fallback ~ ")";
     }
 
     /**

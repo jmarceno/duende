@@ -45,10 +45,28 @@ print(v) // -1
 </code></pre>
 
       <h2>? else operator</h2>
-      <p>Extract a value or compute a fallback expression when the result is an error.</p>
+      <p>Extract a value or compute a fallback when the wrapper is <code>Error</code> or <code>None</code>. The subject expression runs once. The fallback expression runs only in the failure case, and then only once.</p>
+      <p>The type of <code>x ? else fallback</code> is the type of <code>fallback</code>. On success, the payload is converted to that type, so <code>Result&lt;Status&gt; ? else "error"</code> yields the status name. On failure, the fallback value is the result and the payload is not read.</p>
       <pre><code>let Result&lt;float&gt; parsed = parse_number("invalid")
 let float f = parsed ? else 0.0
 </code></pre>
+
+      <h2>Where Ok, Error, Some, and None get their type</h2>
+      <p><code>Ok</code>, <code>Error</code>, <code>Some</code>, and <code>None</code> take the wrapper type from the nearest declaration, argument, assignment, or return. An <code>int</code> payload is the 64-bit <code>int</code>, including a literal such as <code>Ok(3000000000)</code> stored in <code>Result&lt;int&gt;</code>. A literal stored in <code>Result&lt;float&gt;</code> or <code>Maybe&lt;float&gt;</code> uses <code>float</code>.</p>
+      <p>Inside a function that returns <code>Result</code> or <code>Maybe</code>, a constructor with no tighter context uses that return type. With no context at all, <code>Error</code> is <code>Result&lt;string&gt;</code> and <code>None</code> is <code>Maybe&lt;string&gt;</code>. <code>Ok</code> and <code>Some</code> then use the payload's type, and an int literal is still <code>int</code>.</p>
+      <pre><code>let Result&lt;int&gt; bad = Error("nope")
+let Maybe&lt;int&gt; empty = None
+let Result&lt;float&gt; widened = Ok(3)
+
+int take(Result&lt;int&gt; r) do
+    return r ? else -1
+end
+
+take(Error("missing"))
+</code></pre>
+
+      <h2>One Result and one Maybe</h2>
+      <p><code>Result</code> and <code>Maybe</code> are the same types in every module. A function in one file can return <code>Ok</code>, <code>Error</code>, <code>Some</code>, or <code>None</code>, and another file can store that value, pass it on, or unwrap it.</p>
 
       <h2>Maybe</h2>
       <p><code>Some(value)</code> or <code>None</code> represent optional values.</p>

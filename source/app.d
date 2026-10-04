@@ -22,6 +22,9 @@ import std.datetime.stopwatch;
 import core.time : Duration; // for timing values
 import std.conv : to;
 
+// Canonical Result/Maybe module, embedded so every build writes the same file.
+enum duendeRuntimeSource = import("duende_runtime.d");
+
 // Terminal coloring for CLI output
 static import arsd.terminal;
 
@@ -254,6 +257,11 @@ void main(string[] args) {
             moduleDPaths[info.moduleName] = dPath;
             if (verbose) writefln("Generated %s -> %s", info.moduleName, dPath);
         }
+        string runtimePath = buildPath(outputDir, "duende_runtime.d");
+        std.file.write(runtimePath, duendeRuntimeSource);
+        string[] generatedSources;
+        foreach (p; moduleDPaths.values) generatedSources ~= p;
+        generatedSources ~= runtimePath;
     swTranspile.stop();
     auto transpileDur = swTranspile.peek;
 
@@ -324,7 +332,7 @@ void main(string[] args) {
             string exe = DubIntegration.buildTempDubFromUserConfig(
                 outputDir,
                 exeStem,
-                moduleDPaths.values,
+                generatedSources,
                 helperSources,
                 buildBaseDir,
                 providerDubDeps,
@@ -356,7 +364,7 @@ void main(string[] args) {
             string exe = DubIntegration.buildTempDubWithSources(
                 outputDir,
                 exeStem,
-                moduleDPaths.values,
+                generatedSources,
                 helperSources,
                 providerDubDeps,
                 providerDubSubCfgs,
@@ -392,7 +400,8 @@ void main(string[] args) {
                 ccArgs = [compilerExe, "-of=" ~ executablePath];
                 if (optimize) ccArgs ~= ["-O3", "-release", "-enable-inlining"];
             }
-            foreach (path; moduleDPaths.values) ccArgs ~= path;
+            ccArgs ~= "-I" ~ outputDir;
+            foreach (path; generatedSources) ccArgs ~= path;
             foreach (hs; helperSources) ccArgs ~= hs;
             auto swCompile = StopWatch(AutoStart.yes);
             auto result = execute(ccArgs);

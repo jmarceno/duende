@@ -1,0 +1,15 @@
+Result<int> worked(int n) do
+    return Ok(n)
+end
+
+Result<int> failed() do
+    return Error("from-lib")
+end
+
+Maybe<string> present(string s) do
+    return Some(s)
+end
+
+Maybe<string> missing() do
+    return None
+end

@@ -464,6 +464,53 @@ class TestDuendeExamples:
             else:
                 assert False, f"Missing line {i}: expected '{expected_line}'"
 
+    def test_result_maybe_context(self):
+        """Result and Maybe use one shared type, contextual constructors, and a lazy fallback."""
+        source_file = self.examples_dir / "result_maybe.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        lines = stdout.strip().split('\n')
+        expected = [
+            "7",
+            "-1",
+            "3.25",
+            "3000000000",
+            "-9",
+            "8",
+            "1",
+            "assigned",
+            "0",
+            "from-lib",
+            "0",
+            "6",
+            "6",
+            "5",
+            "-9",
+            "lib",
+            "none",
+            "yes",
+            "none",
+            "2",
+            "-1",
+            "4",
+            "-1",
+            "8",
+            "-1",
+            "2",
+            "1",
+            "11",
+            "4",
+            "9",
+            "2",
+            "1",
+            "Ada",
+            "fallback",
+            "2",
+            "1",
+        ]
+        assert lines == expected, f"expected {expected}, got {lines}"
+
     def test_pattern_matching_example(self):
         """Test the pattern_matching.du example"""
         source_file = self.examples_dir / "pattern_matching.du"

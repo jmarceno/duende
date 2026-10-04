@@ -1,0 +1,131 @@
+import result_maybe_lib {worked, failed, present, missing}
+
+var int payload_runs = 0
+var int subject_runs = 0
+var int fallback_runs = 0
+var int maybe_subject_runs = 0
+var int maybe_fallback_runs = 0
+
+int payload() do
+    payload_runs = payload_runs + 1
+    return 11
+end
+
+Result<int> succeed() do
+    subject_runs = subject_runs + 1
+    return Ok(4)
+end
+
+Result<int> fail() do
+    subject_runs = subject_runs + 1
+    return Error("x")
+end
+
+int recover() do
+    fallback_runs = fallback_runs + 1
+    return 9
+end
+
+Maybe<string> some_name() do
+    maybe_subject_runs = maybe_subject_runs + 1
+    return Some("Ada")
+end
+
+Maybe<string> no_name() do
+    maybe_subject_runs = maybe_subject_runs + 1
+    return None
+end
+
+string recover_name() do
+    maybe_fallback_runs = maybe_fallback_runs + 1
+    return "fallback"
+end
+
+int use_result(Result<int> r) do
+    return r ? else -9
+end
+
+string use_maybe(Maybe<string> m) do
+    return m ? else "none"
+end
+
+Result<int> branch(int n) do
+    return match n do
+        0 -> Error("zero")
+        _ -> Ok(n)
+    end
+end
+
+int main() do
+    let Result<int> local_ok = Ok(7)
+    let Result<int> local_err = Error("nope")
+    print(local_ok ? else -1)
+    print(local_err ? else -1)
+
+    let Result<float> widened = Ok(3)
+    let float wf = widened ? else 0.0
+    print(wf + 0.25)
+
+    let Result<int> big = Ok(3000000000)
+    print(big ? else 0)
+
+    print(use_result(Error("arg")))
+    print(use_result(Ok(8)))
+
+    var Result<int> slot = Ok(1)
+    print(slot ? else 0)
+    slot = Error("assigned")
+    print(slot ? else 0)
+    slot = failed()
+    print(slot ? else 0)
+    slot = worked(6)
+    print(slot ? else 0)
+
+    print(use_result(worked(5)))
+    print(use_result(failed()))
+
+    print(use_maybe(present("lib")))
+    print(use_maybe(missing()))
+    print(use_maybe(Some("yes")))
+    print(use_maybe(None))
+
+    var Maybe<int> box = Some(2)
+    print(box ? else -1)
+    box = None
+    print(box ? else -1)
+
+    let Result<Maybe<int>> wrapped = Ok(Some(4))
+    let Maybe<int> inner = wrapped ? else None
+    print(inner ? else -1)
+
+    let Result<Maybe<int>> wrapped_none = Ok(None)
+    let Maybe<int> inner_none = wrapped_none ? else Some(1)
+    print(inner_none ? else -1)
+
+    let Result<Maybe<int>> wrapped_err = Error("nested")
+    let Maybe<int> inner_err = wrapped_err ? else Some(8)
+    print(inner_err ? else -1)
+
+    print(branch(0) ? else -1)
+    print(branch(2) ? else -1)
+
+    let Result<int> once = Ok(payload())
+    print(payload_runs)
+    print(once ? else 0)
+
+    let int okv = succeed() ? else recover()
+    let int badv = fail() ? else recover()
+    print(okv)
+    print(badv)
+    print(subject_runs)
+    print(fallback_runs)
+
+    let string somev = some_name() ? else recover_name()
+    let string nonev = no_name() ? else recover_name()
+    print(somev)
+    print(nonev)
+    print(maybe_subject_runs)
+    print(maybe_fallback_runs)
+
+    return 0
+end

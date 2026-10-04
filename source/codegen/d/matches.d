@@ -50,7 +50,7 @@ mixin template DMatchesMixin() {
      * Generate match expressions.
      * These are expressions that perform pattern matching and return values.
      */
-    private string generateMatchExpression(MatchExpression m) {
+    private string generateMatchExpression(MatchExpression m, string expected = "") {
         auto buf = appender!string();
         string subjExpr = generateExpression(m.subject);
         buf ~= "(() {\n";
@@ -69,7 +69,7 @@ mixin template DMatchesMixin() {
             if (prelude.length > 0) {
                 buf ~= indent() ~ prelude ~ "\n";
             }
-            buf ~= indent() ~ "return " ~ generateExpression(c.value) ~ ";\n";
+            buf ~= indent() ~ "return " ~ generateExpected(expected, c.value) ~ ";\n";
             indentLevel--;
             buf ~= indent() ~ "}\n";
             first = false;

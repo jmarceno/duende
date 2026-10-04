@@ -16,7 +16,25 @@ mixin template DExpressionsMixin() {
      * Generate D code for any expression.
      * This is the main entry point for expression generation.
      */
+    /**
+     * Generate an expression that should have the given D type.
+     * Empty, auto, and void leave the expression untyped.
+     */
+    private string generateExpected(string expected, Expression expr) {
+        if (!expr) return "";
+        if (!expected.length || expected == "auto" || expected == "void")
+            return generateExpression(expr);
+        string prev = exprExpectedType;
+        exprExpectedType = expected;
+        string code = generateExpression(expr);
+        exprExpectedType = prev;
+        return code;
+    }
+
     string generateExpression(Expression expr) {
+        // The expected type applies to this expression. Nested expressions opt in.
+        string expected = exprExpectedType;
+        exprExpectedType = "";
         if (auto literal = cast(LiteralExpression)expr) {
             return generateLiteral(literal);
         }
@@ -34,7 +52,9 @@ mixin template DExpressionsMixin() {
         }
         // Support pseudo-call form for builtin-like safeCast with first arg as TypeLiteralExpression, via CallExpression handling
         if (auto assignment = cast(AssignmentExpression)expr) {
-            string rhs = generateExpression(assignment.value);
+            string rhsExpected;
+            if (auto viPtr = assignment.variable in variableTypes) rhsExpected = viPtr.dType;
+            string rhs = generateExpected(rhsExpected, assignment.value);
             // If assigning an unqualified enum member to an enum-typed variable, qualify it with the enum name
             if (assignment.variable in variableTypes) {
                 auto vi = variableTypes[assignment.variable];
@@ -82,13 +102,13 @@ mixin template DExpressionsMixin() {
             return generateLambdaExpression(lambda);
         }
         if (auto resultConstructor = cast(ResultConstructorExpression)expr) {
-            return generateResultConstructor(resultConstructor);
+            return generateResultConstructor(resultConstructor, expected);
         }
         if (auto maybeConstructor = cast(MaybeConstructorExpression)expr) {
-            return generateMaybeConstructor(maybeConstructor);
+            return generateMaybeConstructor(maybeConstructor, expected);
         }
         if (auto unwrap = cast(UnwrapExpression)expr) {
-            return generateUnwrapExpression(unwrap);
+            return generateUnwrapExpression(unwrap, expected);
         }
         if (auto tryBlock = cast(TryBlockExpression)expr) {
             return generateTryBlockExpression(tryBlock);
@@ -97,7 +117,7 @@ mixin template DExpressionsMixin() {
             return generatePanicExpression(panic);
         }
         if (auto matchExpr = cast(MatchExpression)expr) {
-            return generateMatchExpression(matchExpr);
+            return generateMatchExpression(matchExpr, expected);
         }
         if (auto castExpr = cast(CastExpression)expr) {
             return generateCastExpression(castExpr);
@@ -192,6 +212,8 @@ mixin template DExpressionsMixin() {
         bool hasNamed = false;
         foreach (n; origNames) { if (n.length) { hasNamed = true; break; } }
         Expression[] args = origArgs;
+        bool namedMapped = false;
+        bool namedFellBack = false;
         if (hasNamed) {
             if (auto pList = call.name in functionSignatures) {
                 auto params = *pList;
@@ -207,7 +229,7 @@ mixin template DExpressionsMixin() {
                     foreach (j, p; params) { if (p.name == nm) { idx = j; break; } }
                     if (idx == size_t.max) {
                         // Unknown name; fallback to original order
-                        mapped = origArgs; filled = null; break;
+                        mapped = origArgs; filled = null; namedFellBack = true; break;
                     }
                     mapped[idx] = a; filled[idx] = true;
                 }
@@ -231,7 +253,7 @@ mixin template DExpressionsMixin() {
                                     mapped[i] = def; filled[i] = true;
                                 } else {
                                     // No default to fill; we cannot omit middle args in D. Fallback: keep original order.
-                                    mapped = origArgs; lastNeeded = cast(long)origArgs.length - 1; break;
+                                    mapped = origArgs; namedFellBack = true; lastNeeded = cast(long)origArgs.length - 1; break;
                                 }
                             }
                         }
@@ -240,6 +262,7 @@ mixin template DExpressionsMixin() {
                         trimmed.length = cast(size_t)(lastNeeded + 1);
                         foreach (i; 0 .. trimmed.length) trimmed[i] = mapped[i];
                         args = trimmed;
+                        if (!namedFellBack) namedMapped = true;
                     } else {
                         // No args actually provided? leave as-is
                         args = origArgs;
@@ -247,10 +270,11 @@ mixin template DExpressionsMixin() {
                 }
             }
         }
+        bool argsAligned = !hasNamed || namedMapped;
         // safeCast(type, value) -> Result!T with strict conversion rules
         if (call.name == "safeCast") {
             if (call.arguments.length != 2) {
-                return "duende_error!string(\"safeCast requires (type, value)\")"; // should not happen
+                return "Result!(string).error(\"safeCast requires (type, value)\")"; // should not happen
             }
             auto typeArg = call.arguments[0];
             auto valArg = call.arguments[1];
@@ -744,7 +768,7 @@ mixin template DExpressionsMixin() {
         if (call.name in frameTypes) {
             auto res = appender!string();
             res ~= "new " ~ call.name ~ "(";
-            foreach (i, arg; args) { if (i > 0) res ~= ", "; res ~= generateExpression(arg); }
+            foreach (i, arg; args) { if (i > 0) res ~= ", "; res ~= generateCallArg(call.name, i, arg, argsAligned); }
             res ~= ")";
             return res.data;
         }
@@ -757,11 +781,26 @@ mixin template DExpressionsMixin() {
 
         foreach (i, arg; args) {
             if (i > 0) result ~= ", ";
-            result ~= generateExpression(arg);
+            result ~= generateCallArg(call.name, i, arg, argsAligned);
         }
 
         result ~= ")";
         return result.data;
+    }
+
+    /**
+     * Argument expression, typed from the callee parameter when the arguments line up.
+     */
+    private string generateCallArg(string callee, size_t index, Expression arg, bool aligned) {
+        string expected;
+        if (aligned) {
+            if (auto pList = callee in functionSignatures) {
+                auto params = *pList;
+                if (index < params.length && params[index].type != DuendeType.AUTO)
+                    expected = renderParamType(params[index]);
+            }
+        }
+        return generateExpected(expected, arg);
     }
 
     /**

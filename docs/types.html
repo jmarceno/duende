@@ -67,7 +67,7 @@ let bool ok = 1 &lt; 2
   <p>Containers use explicit element types, e.g., <code>list&lt;int&gt;</code>, <code>list&lt;string&gt;</code>. Empty list literals require context: <code>let list&lt;string&gt; xs = []</code>. Algebraic results use constructor names (see <a href="result-maybe.html">Result & Maybe</a>).</p>
 
       <h2>Result and Maybe</h2>
-      <p>These are sum types with constructors <code>Ok</code>/<code>Error</code> and <code>Some</code>/<code>None</code>. Use the <code>? else</code> operator to provide a fallback. See the dedicated page: <a href="result-maybe.html">Result & Maybe</a>.</p>
+      <p>These are sum types with constructors <code>Ok</code>/<code>Error</code> and <code>Some</code>/<code>None</code>. The same <code>Result</code> and <code>Maybe</code> types are shared by every module. Constructors copy the wrapper type from the declaration, argument, assignment, or return around them. <code>? else</code> reads the subject once and evaluates its fallback only for <code>Error</code> or <code>None</code>. See <a href="result-maybe.html">Result & Maybe</a>.</p>
 
   <h2>Type casting</h2>
   <p>Use function-like syntax to convert between core types:</p>
