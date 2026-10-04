@@ -21,7 +21,7 @@ int main() do
 end
 """
     res = run_duende(src)
-    assert res.returncode == 0 or res.returncode == 0  # duende prints error to stdout but exits 0 in current design
+    assert res.returncode == 1
     assert "Invalid use of 'break' outside of a loop" in (res.stderr or res.stdout)
 
 
@@ -34,7 +34,7 @@ int main() do
 end
 """
     res = run_duende(src)
-    assert res.returncode == 0 or res.returncode == 0
+    assert res.returncode == 1
     assert "Invalid use of 'continue' outside of a loop" in (res.stderr or res.stdout)
 
 
@@ -46,6 +46,5 @@ int main() do
 end
 """
     res = run_duende(src)
-    # Compiler prints error to stdout/stderr and currently exits 0 per existing design
-    assert res.returncode == 0 or res.returncode == 0
+    assert res.returncode == 1
     assert "Hash and digest functions require 'import std.hash' or 'import std.digest'" in (res.stderr or res.stdout)

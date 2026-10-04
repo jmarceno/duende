@@ -286,10 +286,15 @@ mixin template DStatementsMixin() {
             returnType = "auto";
         }
 
-        if (funcDecl.name == "main" && funcDecl.returnType == DuendeType.INT) {
+        bool isIntMain = funcDecl.name == "main" && funcDecl.returnType == DuendeType.INT;
+        if (isIntMain) {
             returnType = "int";
         }
         currentFunctionReturnDType = returnType;
+        // Returns inside an int main become the process exit status (D's main must return int, Duende's int is long)
+        auto savedEmittingIntMain = emittingIntMain;
+        emittingIntMain = isIntMain;
+        scope(exit) emittingIntMain = savedEmittingIntMain;
 
         // If any parameter is 'auto', lift to a D template with concrete type params (T0, T1, ...)
         string[] templateTypeParams;
@@ -348,16 +353,10 @@ mixin template DStatementsMixin() {
             result ~= generateStatement(stmt);
         }
 
-        // Add implicit return 0 for main function that returns int
-        if (funcDecl.name == "main" && funcDecl.returnType == DuendeType.INT) {
-            bool hasReturnStatement = false;
-            foreach (stmt; funcDecl.body) {
-                if (cast(ReturnStatement)stmt) {
-                    hasReturnStatement = true;
-                    break;
-                }
-            }
-            if (!hasReturnStatement) {
+        // Falling off the end of an int main exits with status 0
+        if (isIntMain) {
+            bool endsWithReturn = funcDecl.body.length > 0 && cast(ReturnStatement)funcDecl.body[$-1] !is null;
+            if (!endsWithReturn) {
                 result ~= indent() ~ "return 0;\n";
             }
         }
@@ -380,7 +379,11 @@ mixin template DStatementsMixin() {
      */
     private string generateReturnStatement(ReturnStatement retStmt) {
         if (retStmt.value) {
-            return indent() ~ "return " ~ generateWithNode(currentFunctionReturnNode, currentFunctionReturnDType, retStmt.value) ~ ";\n";
+            string value = generateWithNode(currentFunctionReturnNode, currentFunctionReturnDType, retStmt.value);
+            if (emittingIntMain) {
+                return indent() ~ "return cast(int)(" ~ value ~ ");\n";
+            }
+            return indent() ~ "return " ~ value ~ ";\n";
         }
         return indent() ~ "return;\n";
     }

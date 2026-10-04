@@ -1338,6 +1338,10 @@ mixin template DExpressionsMixin() {
         auto result = appender!string();
         result ~= "(() {\n";
         indentLevel++;
+        // A return inside the closure returns from the closure, not from main
+        auto savedEmittingIntMain = emittingIntMain;
+        emittingIntMain = false;
+        scope(exit) emittingIntMain = savedEmittingIntMain;
         
         foreach (stmt; expr.statements) {
             result ~= generateStatement(stmt);
