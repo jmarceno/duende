@@ -11,6 +11,15 @@ import std.format;
  * of patterns including wildcards, result patterns, and expression patterns.
  */
 mixin template DMatchesMixin() {
+    /*
+     * Lowering shared by match statements and expressions. For each arm, in order:
+     *   1. test the pattern against the subject (evaluated once, before any arm);
+     *   2. bind Ok(x)/Error(e) payloads under fresh D names, so a binding never collides
+     *      with an outer variable of the same name;
+     *   3. evaluate the guard, which sees those bindings;
+     *   4. run the arm. The first arm whose pattern and guard both hold is the only one run.
+     */
+
     /**
      * Generate match statements.
      * These are statements that perform pattern matching with side effects.
@@ -18,19 +27,22 @@ mixin template DMatchesMixin() {
     private string generateMatchStatement(MatchStatement m) {
         auto buf = appender!string();
         string subj = format("__du_match_%s", ++matchCounter);
+        string done = subj ~ "_done";
         buf ~= indent() ~ "auto " ~ subj ~ " = " ~ generateExpression(m.subject) ~ ";\n";
-        bool first = true;
+        buf ~= indent() ~ "bool " ~ done ~ " = false;\n";
         foreach (c; m.cases) {
             string prelude;
-            string cond = generatePatternCondition(subj, c.pattern, prelude);
-            if (c.guard) {
-                cond = "(" ~ cond ~ ") && (" ~ generateExpression(c.guard) ~ ")";
-            }
-            buf ~= indent() ~ (first ? "if (" : "else if (") ~ cond ~ ") {\n";
+            string[string] renames;
+            string cond = generatePatternCondition(subj, c.pattern, prelude, renames);
+            buf ~= indent() ~ "if (!" ~ done ~ " && (" ~ cond ~ ")) {\n";
             indentLevel++;
-            if (prelude.length > 0) {
-                buf ~= indent() ~ prelude ~ "\n";
+            if (prelude.length > 0) buf ~= indent() ~ prelude ~ "\n";
+            auto saved = pushBindingRenames(renames);
+            if (c.guard) {
+                buf ~= indent() ~ "if (" ~ generateExpression(c.guard) ~ ") {\n";
+                indentLevel++;
             }
+            buf ~= indent() ~ done ~ " = true;\n";
             foreach (s; c.body) {
                 // In match statement bodies, don't auto-wrap with duende_eval; emit raw expressions
                 if (auto exprStmt = cast(ExpressionStatement)s) {
@@ -39,9 +51,13 @@ mixin template DMatchesMixin() {
                     buf ~= generateStatement(s);
                 }
             }
+            if (c.guard) {
+                indentLevel--;
+                buf ~= indent() ~ "}\n";
+            }
+            bindingRenames = saved;
             indentLevel--;
             buf ~= indent() ~ "}\n";
-            first = false;
         }
         return buf.data;
     }
@@ -57,28 +73,36 @@ mixin template DMatchesMixin() {
         indentLevel++;
         string subj = format("__du_match_%s", ++matchCounter);
         buf ~= indent() ~ "auto " ~ subj ~ " = " ~ subjExpr ~ ";\n";
-        bool first = true;
         foreach (c; m.cases) {
             string prelude;
-            string cond = generatePatternCondition(subj, c.pattern, prelude);
-            if (c.guard) {
-                cond = "(" ~ cond ~ ") && (" ~ generateExpression(c.guard) ~ ")";
-            }
-            buf ~= indent() ~ (first ? "if (" : "else if (") ~ cond ~ ") {\n";
+            string[string] renames;
+            string cond = generatePatternCondition(subj, c.pattern, prelude, renames);
+            buf ~= indent() ~ "if (" ~ cond ~ ") {\n";
             indentLevel++;
-            if (prelude.length > 0) {
-                buf ~= indent() ~ prelude ~ "\n";
+            if (prelude.length > 0) buf ~= indent() ~ prelude ~ "\n";
+            auto saved = pushBindingRenames(renames);
+            string ret = "return " ~ generateExpected(expected, c.value) ~ ";";
+            if (c.guard) {
+                buf ~= indent() ~ "if (" ~ generateExpression(c.guard) ~ ") " ~ ret ~ "\n";
+            } else {
+                buf ~= indent() ~ ret ~ "\n";
             }
-            buf ~= indent() ~ "return " ~ generateExpected(expected, c.value) ~ ";\n";
+            bindingRenames = saved;
             indentLevel--;
             buf ~= indent() ~ "}\n";
-            first = false;
         }
-        // If none matched and no wildcard provided, make it unreachable (non-exhaustive match)
-        buf ~= indent() ~ "assert(0);\n";
+        // Semantic analysis guarantees coverage; this only guards values it cannot see (e.g. out-of-range enums)
+        buf ~= indent() ~ "assert(0, \"no match arm matched\");\n";
         indentLevel--;
         buf ~= indent() ~ "})()";
         return buf.data;
+    }
+
+    // Make arm bindings visible under their D names; returns the previous map to restore
+    private string[string] pushBindingRenames(string[string] renames) {
+        auto saved = bindingRenames.dup;
+        foreach (k, v; renames) bindingRenames[k] = v;
+        return saved;
     }
 
     /**
@@ -92,7 +116,7 @@ mixin template DMatchesMixin() {
      * 
      * Returns: D condition expression as a string
      */
-    private string generatePatternCondition(string subj, Pattern pat, out string prelude) {
+    private string generatePatternCondition(string subj, Pattern pat, out string prelude, ref string[string] renames) {
         prelude = "";
         
         if (cast(WildcardPattern)pat) {
@@ -101,14 +125,18 @@ mixin template DMatchesMixin() {
         
         if (auto okp = cast(ResultOkPattern)pat) {
             if (okp.bindName.length > 0) {
-                prelude = "auto " ~ okp.bindName ~ " = " ~ subj ~ ".value;";
+                string dname = format("__du_bind_%s_%s", ++matchCounter, okp.bindName);
+                prelude = "auto " ~ dname ~ " = " ~ subj ~ ".value;";
+                renames[okp.bindName] = dname;
             }
             return subj ~ ".isOk";
         }
         
         if (auto errp = cast(ResultErrorPattern)pat) {
             if (errp.bindName.length > 0) {
-                prelude = "auto " ~ errp.bindName ~ " = " ~ subj ~ ".errorMessage;";
+                string dname = format("__du_bind_%s_%s", ++matchCounter, errp.bindName);
+                prelude = "auto " ~ dname ~ " = " ~ subj ~ ".errorMessage;";
+                renames[errp.bindName] = dname;
             }
             return "!" ~ subj ~ ".isOk";
         }

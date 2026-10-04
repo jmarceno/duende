@@ -391,17 +391,12 @@ class SemanticAnalyzer {
 			return;
 		}
 		if (auto ms = cast(MatchStatement)s) {
-			visitExpr(ms.subject, sourcePath, errs, env, depth + 1);
-			foreach (c; ms.cases) {
-				auto armScope = env.child();
-				if (auto okp = cast(ResultOkPattern)c.pattern) {
-					if (okp.bindName.length) armScope.define(okp.bindName, typeInfo(DuendeType.AUTO), false);
-				}
-				if (auto errp = cast(ResultErrorPattern)c.pattern) {
-					if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.AUTO), false);
-				}
-				foreach (st; c.body) visitStmt(st, sourcePath, errs, armScope, depth + 1);
-			}
+			Pattern[] pats; Expression[] guards;
+			foreach (c; ms.cases) { pats ~= c.pattern; guards ~= c.guard; }
+			visitMatch(ms.subject, pats, guards, false, normalizePos(ms.position, sourcePath), sourcePath, errs, env, depth,
+				(size_t i, ref ScopeEnv armScope) {
+					foreach (st; ms.cases[i].body) visitStmt(st, sourcePath, errs, armScope, depth + 1);
+				});
 			return;
 		}
 		// other statements ignored for now (Break/Continue validity handled elsewhere)
@@ -745,22 +740,18 @@ class SemanticAnalyzer {
 			return typeInfo(DuendeType.STRING);
 		}
 		if (auto me2 = cast(MatchExpression)e) {
-			visitExpr(me2.subject, sourcePath, errs, env, depth + 1);
-			foreach (c; me2.cases) {
-				auto armScope = env.child();
-				if (auto okp = cast(ResultOkPattern)c.pattern) {
-					if (okp.bindName.length) armScope.define(okp.bindName, typeInfo(DuendeType.AUTO), false);
-				}
-				if (auto errp = cast(ResultErrorPattern)c.pattern) {
-					if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.AUTO), false);
-				}
-				auto at = visitExpr(c.value, sourcePath, errs, armScope, depth + 1, expected);
-				if (expected.present && !isPermissive(expected) && expected.base != DuendeType.VOID && !typeCompatible(expected, at)) {
-					errs.addError(
-						"Match arm type does not match expected type (need=" ~ typeInfoToString(expected) ~ ", got=" ~ typeInfoToString(at) ~ ")",
-						getExprPos(c.value, sourcePath));
-				}
-			}
+			Pattern[] pats; Expression[] guards;
+			foreach (c; me2.cases) { pats ~= c.pattern; guards ~= c.guard; }
+			visitMatch(me2.subject, pats, guards, true, normalizePos(me2.position, sourcePath), sourcePath, errs, env, depth,
+				(size_t i, ref ScopeEnv armScope) {
+					auto c = me2.cases[i];
+					auto at = visitExpr(c.value, sourcePath, errs, armScope, depth + 1, expected);
+					if (expected.present && !isPermissive(expected) && expected.base != DuendeType.VOID && !typeCompatible(expected, at)) {
+						errs.addError(
+							"Match arm type does not match expected type (need=" ~ typeInfoToString(expected) ~ ", got=" ~ typeInfoToString(at) ~ ")",
+							getExprPos(c.value, sourcePath));
+					}
+				});
 			if (expected.present && !isPermissive(expected)) return expected;
 			return TypeNode.unknownType();
 		}
@@ -1011,6 +1002,167 @@ class SemanticAnalyzer {
 			return false;
 		}
 		return false;
+	}
+
+	/**
+	 * Shared analysis of match statements and expressions.
+	 *
+	 * Each arm gets its own scope: Ok(x)/Error(e) bindings are typed from the subject, the guard
+	 * sees those bindings and must be a bool, then the arm body/value is visited by `visitArm`.
+	 *
+	 * Coverage rules (guarded arms never count toward coverage):
+	 *   - enum subjects must name every value, or have a `_` arm;
+	 *   - Result subjects must have both Ok(...) and Error(...) arms, or a `_` arm;
+	 *   - a match expression on any other type must have a `_` arm (bool may instead cover true and false);
+	 *   - a match statement on any other type may leave values unmatched, which then do nothing.
+	 * An arm that can never be selected, because earlier unguarded arms already match everything
+	 * it could match, is an error.
+	 */
+	private void visitMatch(Expression subject, Pattern[] pats, Expression[] guards, bool isExpression, SourcePosition matchPos,
+			string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth,
+			scope void delegate(size_t, ref ScopeEnv) visitArm) {
+		auto st = visitExpr(subject, sourcePath, errs, env, depth + 1);
+
+		enum Domain { open, enumeration, result, boolean }
+		Domain domain = Domain.open;
+		string enumName;
+		if (st.base == DuendeType.CUSTOM && st.name.length && (st.name in enums)) {
+			domain = Domain.enumeration; enumName = st.name;
+		} else if (st.base == DuendeType.RESULT) {
+			domain = Domain.result;
+		} else if (st.base == DuendeType.BOOL) {
+			domain = Domain.boolean;
+		} else if (isPermissive(st)) {
+			// Subject type unknown here: infer the domain from the patterns
+			foreach (p; pats) {
+				if (cast(ResultOkPattern)p !is null || cast(ResultErrorPattern)p !is null) { domain = Domain.result; break; }
+			}
+			if (domain == Domain.open) {
+				foreach (p; pats) {
+					auto ep = cast(ExpressionPattern)p;
+					if (ep is null) continue;
+					auto ve = cast(VariableExpression)ep.expr;
+					string en = ve !is null ? resolveEnumForValue(ve.name) : enumOfQualified(ep.expr);
+					if (en is null) { enumName = null; break; }
+					if (enumName !is null && enumName != en) { enumName = null; break; }
+					enumName = en;
+				}
+				if (enumName !is null) domain = Domain.enumeration;
+			}
+		}
+		TypeNode okType = (st.base == DuendeType.RESULT && st.args.length) ? st.args[0] : typeInfo(DuendeType.AUTO);
+
+		bool coveredAll = false;
+		bool[string] covered; // unguarded keys seen: enum values, "Ok"/"Error", "true"/"false"
+		foreach (i, p; pats) {
+			auto patPos = patternPos(p, matchPos, sourcePath);
+			auto armScope = env.child();
+			string key;
+			if (auto okp = cast(ResultOkPattern)p) {
+				if (okp.bindName.length) armScope.define(okp.bindName, okType, false);
+				key = "Ok";
+			} else if (auto errp = cast(ResultErrorPattern)p) {
+				if (errp.bindName.length) armScope.define(errp.bindName, typeInfo(DuendeType.STRING), false);
+				key = "Error";
+			} else if (auto ep = cast(ExpressionPattern)p) {
+				visitExpr(ep.expr, sourcePath, errs, env, depth + 1);
+				if (domain == Domain.enumeration) key = enumValueOf(ep.expr, enumName);
+				else if (domain == Domain.boolean) {
+					if (auto lit = cast(LiteralExpression)ep.expr) {
+						if (lit.type == DuendeType.BOOL && lit.value.convertsTo!bool) key = lit.value.get!bool ? "true" : "false";
+					}
+				}
+			}
+			bool unguarded = guards[i] is null;
+			bool isWildcard = cast(WildcardPattern)p !is null;
+
+			if (coveredAll || (key.length && (key in covered))) {
+				errs.addError("Unreachable match arm: earlier arms without guards already match every value it could match", patPos);
+			}
+			if (guards[i] !is null) {
+				auto gt = visitExpr(guards[i], sourcePath, errs, armScope, depth + 1, typeInfo(DuendeType.BOOL));
+				if (!isPermissive(gt) && gt.base != DuendeType.BOOL) {
+					errs.addError("Match guard must be a bool (got=" ~ typeInfoToString(gt) ~ ")", getExprPos(guards[i], sourcePath));
+				}
+			}
+			visitArm(i, armScope);
+
+			if (!unguarded) continue;
+			if (isWildcard) coveredAll = true;
+			if (key.length) covered[key] = true;
+			final switch (domain) {
+				case Domain.enumeration:
+					bool all = true;
+					foreach (v; enums[enumName]) if (!(v in covered)) { all = false; break; }
+					if (all) coveredAll = true;
+					break;
+				case Domain.result:
+					if (("Ok" in covered) && ("Error" in covered)) coveredAll = true;
+					break;
+				case Domain.boolean:
+					if (("true" in covered) && ("false" in covered)) coveredAll = true;
+					break;
+				case Domain.open:
+					break;
+			}
+		}
+
+		if (coveredAll) return;
+		string what = isExpression ? "Match expression" : "Match";
+		final switch (domain) {
+			case Domain.enumeration:
+				string[] missing;
+				foreach (v; enums[enumName]) if (!(v in covered)) missing ~= v;
+				errs.addError(what ~ " on enum '" ~ enumName ~ "' does not cover " ~ missing.join(", ") ~ "; add arms without guards for them or a final '_' arm", matchPos);
+				break;
+			case Domain.result:
+				string[] missingR;
+				if (!("Ok" in covered)) missingR ~= "Ok(...)";
+				if (!("Error" in covered)) missingR ~= "Error(...)";
+				errs.addError(what ~ " on a Result does not cover " ~ missingR.join(" and ") ~ "; add arms without guards for them or a final '_' arm", matchPos);
+				break;
+			case Domain.boolean:
+			case Domain.open:
+				if (isExpression) {
+					errs.addError("Match expression does not cover every value; add a final '_' arm (arms with guards do not count)", matchPos);
+				}
+				break;
+		}
+	}
+
+	// Enum value named by a pattern expression (ACTIVE or Status.ACTIVE), or null
+	private string enumValueOf(Expression e, string enumName) {
+		if (auto ve = cast(VariableExpression)e) {
+			if (enums[enumName].canFind(ve.name)) return ve.name;
+		}
+		if (auto pe = cast(PropertyExpression)e) {
+			if (auto ve = cast(VariableExpression)pe.object) {
+				if (ve.name == enumName && enums[enumName].canFind(pe.property)) return pe.property;
+			}
+		}
+		return null;
+	}
+
+	// Enum named by a qualified pattern like Status.ACTIVE, or null
+	private string enumOfQualified(Expression e) {
+		if (auto pe = cast(PropertyExpression)e) {
+			if (auto ve = cast(VariableExpression)pe.object) {
+				if (auto vals = ve.name in enums) {
+					if ((*vals).canFind(pe.property)) return ve.name;
+				}
+			}
+		}
+		return null;
+	}
+
+	private SourcePosition patternPos(Pattern p, SourcePosition fallback, string file) {
+		SourcePosition pos;
+		if (auto w = cast(WildcardPattern)p) pos = w.position;
+		else if (auto ep = cast(ExpressionPattern)p) pos = ep.position;
+		else if (auto okp = cast(ResultOkPattern)p) pos = okp.position;
+		else if (auto errp = cast(ResultErrorPattern)p) pos = errp.position;
+		if (pos.line == 0) return fallback;
+		return normalizePos(pos, file);
 	}
 
 	// Methods and constructors are not bound by name yet; reject names instead of silently passing them positionally

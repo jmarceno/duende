@@ -26,7 +26,8 @@ class DCodeGenerator : CodeGenerator {
     private int matchCounter = 0; // Unique id for match temporaries
     private bool[string] requiredImports; // Track which imports are needed
     private DuendeType currentFunctionReturnType = DuendeType.VOID; // Track current function return type
-    private bool emittingIntMain = false; // Directly inside the body of `int main` (not a nested closure)
+    private bool emittingIntMain = false;
+    private string[string] bindingRenames; // Duende match-arm binding name -> unique D name // Directly inside the body of `int main` (not a nested closure)
     private DuendeType currentFunctionReturnInnerType = DuendeType.VOID; // Track inner type
     private string currentFunctionReturnCustomTypeName; // Track custom inner type name when returning generics
     private TypeNode currentFunctionReturnNode; // Nested generic return type, when parsed

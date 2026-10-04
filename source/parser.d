@@ -816,6 +816,7 @@ class Parser {
 
     private Statement matchStatement(bool isInLocalScope) {
         // already consumed 'match'
+        auto matchTok = previous();
         Expression subject = expression();
         consume(TokenType.DO, "Expected 'do' after match subject");
         consumeNewlines();
@@ -836,7 +837,9 @@ class Parser {
         }
 
         consume(TokenType.END, "Expected 'end' after match statement");
-        return new MatchStatement(subject, cases);
+        auto ms = new MatchStatement(subject, cases);
+        ms.position = SourcePosition(matchTok.line, matchTok.column);
+        return ms;
     }
 
     private Statement statementForMatchArm() {
@@ -872,6 +875,7 @@ class Parser {
 
     private Expression matchExpression() {
         // already consumed 'match'
+        auto matchTok = previous();
         Expression subject = expression();
         consume(TokenType.DO, "Expected 'do' after match subject");
         consumeNewlines();
@@ -890,14 +894,20 @@ class Parser {
         }
 
         consume(TokenType.END, "Expected 'end' after match expression");
-        return new MatchExpression(subject, cases);
+        auto me = new MatchExpression(subject, cases);
+        me.position = SourcePosition(matchTok.line, matchTok.column);
+        return me;
     }
 
     private Pattern parsePattern() {
+        auto startTok = peek();
+        auto startPos = SourcePosition(startTok.line, startTok.column);
         // Wildcard '_'
         if (check(TokenType.IDENTIFIER) && peek().value == "_") {
             advance();
-            return new WildcardPattern();
+            auto w = new WildcardPattern();
+            w.position = startPos;
+            return w;
         }
 
         // Ok(x) / Error(msg) destructuring pattern for Result
@@ -911,13 +921,21 @@ class Parser {
                 bindName = previous().value;
             }
             consume(TokenType.RIGHT_PAREN, "Expected ')' after Ok/Error pattern");
-            if (isOk) return new ResultOkPattern(bindName);
-            else return new ResultErrorPattern(bindName);
+            if (isOk) {
+                auto okp = new ResultOkPattern(bindName);
+                okp.position = startPos;
+                return okp;
+            }
+            auto errp = new ResultErrorPattern(bindName);
+            errp.position = startPos;
+            return errp;
         }
 
         // Otherwise, parse an expression pattern (literal, identifier, call like regex("..."), property/index)
         Expression lhs = assignment(); // allow full expression on LHS like numbers[0]
-        return new ExpressionPattern(lhs);
+        auto ep = new ExpressionPattern(lhs);
+        ep.position = startPos;
+        return ep;
     }
 
     private Expression parseLambda() {

@@ -7,9 +7,10 @@ end
 Result<Status> checkStatus(Status stat, int value) do
     var Status s = ACTIVE  // Initialize with a default value
     
-    match stat do // If you are checking an enum, you should check all cases OR have a default case, otherwise we emit a compilation error
+    match stat do // A match on an enum must cover every value with an arm that has no guard, or have a `_` arm
         ACTIVE if value > 0 -> s = ACTIVE
         ACTIVE if value < 0 -> return Error("Invalid value for active")
+        ACTIVE -> s = ACTIVE // value == 0: the guarded arms above do not count toward coverage
         INACTIVE -> s = INACTIVE
         PENDING -> s = PENDING
     end

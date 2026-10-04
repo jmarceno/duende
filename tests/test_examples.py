@@ -54,6 +54,28 @@ class TestDuendeExamples:
         assert returncode == 0, f"Program failed: {stderr}"
         assert stdout.strip() == "55", f"Expected '55', got '{stdout.strip()}'"
 
+    def test_match_guards_example(self):
+        """Guards see arm bindings; subject and guards are evaluated once per attempt"""
+        source_file = self.examples_dir / "match_guards.du"
+        stdout, stderr, returncode = self.compile_and_run(source_file)
+
+        assert returncode == 0, f"Program failed: {stderr}"
+        assert stdout.splitlines() == [
+            "big 250",
+            "positive 5",
+            "other 0",
+            "failed: negative: -3",
+            "subject calls: 4",
+            "guard calls: 5 (aabab)",
+            "outer x: -7",
+            "stop",
+            "slow",
+            "go",
+            "score 42",
+            "bound value 9",
+            "value after match: 1",
+        ]
+
     def test_named_arguments_example(self):
         """Named/positional arguments bind once and evaluate in source order"""
         source_file = self.examples_dir / "named_arguments.du"

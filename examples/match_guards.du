@@ -1,0 +1,78 @@
+// Match arms: the pattern is tested first, then its payload is bound,
+// then the guard runs with that binding in scope. The subject is evaluated once,
+// and only the first arm whose pattern and guard both hold runs.
+
+enum Light do
+    RED,
+    AMBER,
+    GREEN
+end
+
+var int subjectCalls = 0
+var int guardCalls = 0
+var string guardTrace = ""
+
+Result<int> fetch(int n) do
+    subjectCalls = subjectCalls + 1
+    if n < 0 do
+        return Error("negative: ${n}")
+    end
+    return Ok(n)
+end
+
+bool watch(string tag, bool result) do
+    guardCalls = guardCalls + 1
+    guardTrace = "${guardTrace}${tag}"
+    return result
+end
+
+// Guards read the payload binding, not an outer variable with the same name
+string classify(int x, int n) do
+    return match fetch(n) do
+        Ok(x) if watch("a", x > 100) -> "big ${x}"
+        Ok(x) if watch("b", x > 0) -> "positive ${x}"
+        Ok(x) -> "other ${x}"
+        Error(msg) -> "failed: ${msg}"
+    end
+end
+
+// Every enum value is covered, so no `_` arm is needed
+string action(Light l) do
+    return match l do
+        RED -> "stop"
+        AMBER -> "slow"
+        GREEN -> "go"
+    end
+end
+
+int main() do
+    let int x = -7
+    print(classify(x, 250))
+    print(classify(x, 5))
+    print(classify(x, 0))
+    print(classify(x, -3))
+    print("subject calls: ${subjectCalls}")
+    print("guard calls: ${guardCalls} (${guardTrace})")
+    print("outer x: ${x}")
+
+    print(action(Light.RED))
+    print(action(Light.AMBER))
+    print(action(Light.GREEN))
+
+    // Statement form: first matching arm only, guarded arm falls through to the wildcard
+    var int score = 42
+    match score do
+        0 -> print("zero")
+        _ if score > 100 -> print("huge")
+        _ -> print("score ${score}")
+    end
+
+    // A Result bound to a name that already exists outside the match
+    let int value = 1
+    match fetch(9) do
+        Ok(value) if value > 5 -> print("bound value ${value}")
+        Ok(value) -> print("small value ${value}")
+        Error(e) -> print(e)
+    end
+    print("value after match: ${value}")
+end

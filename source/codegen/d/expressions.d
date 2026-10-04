@@ -50,6 +50,7 @@ mixin template DExpressionsMixin() {
             return generateLiteral(literal);
         }
         if (auto variable = cast(VariableExpression)expr) {
+            if (auto renamed = variable.name in bindingRenames) return *renamed;
             return variable.name;
         }
         if (auto binary = cast(BinaryExpression)expr) {
