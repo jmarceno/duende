@@ -1,4 +1,4 @@
-**ALWAYS UPDATE `docs` when making changes to the language that affect its user facing behavior.**
+**ALWAYS UPDATE `docs/` when making changes to the language that affect its user facing behavior.**
 **DO NOT UPDATE THIS FILE IT IS NOT DOCUMENTATION**
 
 # Duende
