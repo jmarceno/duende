@@ -50,7 +50,7 @@ class Parser {
         if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                  TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
                  TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
-                 TokenType.RESULT, TokenType.MAYBE)) {
+                 TokenType.RESULT, TokenType.MAYBE) || looksLikeFunctionDeclaration()) {
             return functionDeclaration();
         }
         if (match(TokenType.PROTOCOL)) {
@@ -1591,6 +1591,20 @@ class Parser {
         consume(TokenType.END, "Expected 'end' after frame body");
 
         return new FrameDeclaration(name, fields, methods, annotations);
+    }
+
+    private bool looksLikeFunctionDeclaration() {
+        // `Type name(` is a function. A call is `name(`.
+        if (!check(TokenType.IDENTIFIER)) return false;
+        size_t saved = current;
+        skipTypeAhead();
+        bool isFn = check(TokenType.IDENTIFIER);
+        if (isFn) {
+            advance();
+            isFn = check(TokenType.LEFT_PAREN);
+        }
+        current = saved;
+        return isFn;
     }
 
     private bool isMethodDeclaration() {

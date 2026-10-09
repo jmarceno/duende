@@ -92,7 +92,7 @@ print(add3(1, c: 7))               // 1 + 10 + 7 = 18
         <li>Named arguments bind to the parameter with that name; positional arguments then fill the remaining parameters from left to right, wherever they appear in the call.</li>
         <li>Every argument must bind to exactly one parameter. An unknown name, the same name twice, or more positional arguments than free parameters is a compile error, as is leaving out a parameter that has no default.</li>
         <li>Supplied arguments are evaluated exactly once, left to right in the order they are written, whatever parameter they bind to. Defaults for omitted parameters are evaluated after them.</li>
-        <li>Named arguments work for functions declared in the same module. Calls to imported functions, builtins, methods and constructors take positional arguments only; using names there is a compile error.</li>
+        <li>Named arguments work for functions declared in this module and for functions imported from another Duende module. Calls to builtins, provider functions, methods, and constructors take positional arguments only; using names there is a compile error.</li>
       </ul>
       <pre><code>// note() records its tag and returns the value
 print(add3(c: note("c", 3), a: note("a", 1)))   // evaluates c, then a; prints 1 + 10 + 3 = 14
@@ -104,7 +104,7 @@ greet("Duende")
 </code></pre>
 
       <h2>Return</h2>
-      <p>Use <code>return</code> with a value of the declared type. For <code>void</code> functions, <code>return</code> can omit a value.</p>
+      <p>Use <code>return</code> with a value of the declared type. For <code>void</code> functions, <code>return</code> can omit a value. The return type can be a struct, frame, or enum name, as well as <code>list</code>, <code>dict</code>, <code>Result</code>, and <code>Maybe</code>.</p>
 
       <div class="see-also">
         See also: <a href="lambdas.html">Lambdas</a>, <a href="result-maybe.html">Result & Maybe</a>

@@ -1,0 +1,8 @@
+import iface_cases.same_name.left { Point as Left }
+import iface_cases.same_name.right { make as makeRight }
+
+int main() do
+    let Left a = makeRight(1, 2)
+    print(a.x)
+    return 0
+end

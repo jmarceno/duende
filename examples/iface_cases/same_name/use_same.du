@@ -1,0 +1,10 @@
+import iface_cases.same_name.left { Point as Left, make as makeLeft }
+import iface_cases.same_name.right { Point as Right, make as makeRight }
+
+int main() do
+    let Left a = makeLeft(1, 2)
+    let Right b = makeRight(3, 4)
+    print(a.x)
+    print(b.y)
+    return 0
+end

@@ -1,0 +1,6 @@
+import iface_cases.assign.lib
+
+int main() do
+    lib.counter = "no"
+    return 0
+end

@@ -231,6 +231,9 @@ mixin template DExpressionsMixin() {
             if (auto params = call.name in functionSignatures) {
                 return generateBoundCall(call, *params);
             }
+            if (auto params = call.name in importedSignatures) {
+                return generateBoundCall(call, *params);
+            }
         }
         Expression[] args = call.arguments;
         // Without names, arguments line up with parameters positionally
@@ -767,18 +770,22 @@ mixin template DExpressionsMixin() {
         return generateExpected(expected, arg);
     }
 
+    private string generateBoundCall(CallExpression call, Parameter[] params) {
+        return generateBoundCallee(call.name, call.arguments, call.argumentNames, params);
+    }
+
     /**
-     * Generate a call to a module function whose arguments use names.
+     * Generate a call whose arguments use names.
      *
      * Arguments are placed in parameter order. Supplied arguments are evaluated exactly once,
      * left to right in source order, and defaults for skipped parameters are evaluated after
      * them. When parameter order would evaluate side-effecting arguments in a different order,
      * those arguments are first bound to temporaries in source order.
      */
-    private string generateBoundCall(CallExpression call, Parameter[] params) {
-        auto binding = bindArguments(call.name, params, call.arguments.length, call.argumentNames);
+    private string generateBoundCallee(string callee, Expression[] arguments, string[] argumentNames, Parameter[] params) {
+        auto binding = bindArguments(callee, params, arguments.length, argumentNames);
         // Semantic analysis reports binding errors before code generation runs
-        assert(binding.ok, "unbound arguments reached code generation for '" ~ call.name ~ "'");
+        assert(binding.ok, "unbound arguments reached code generation for '" ~ callee ~ "'");
 
         // Emit up to the last supplied parameter; D fills trailing defaults itself
         long lastNeeded = -1;
@@ -789,26 +796,26 @@ mixin template DExpressionsMixin() {
         long prevKey = -1;
         foreach (j; 0 .. cast(size_t)(lastNeeded + 1)) {
             long ai = binding.argForParam[j];
-            Expression e = ai >= 0 ? call.arguments[ai] : params[j].defaultValue;
+            Expression e = ai >= 0 ? arguments[ai] : params[j].defaultValue;
             if (isEffectFreeArgument(e)) continue;
-            long key = ai >= 0 ? ai : cast(long)(call.arguments.length + j);
+            long key = ai >= 0 ? ai : cast(long)(arguments.length + j);
             if (key < prevKey) { needsTemps = true; break; }
             prevKey = key;
         }
 
         // Arguments are typed from the parameter they bind to
-        long[] paramForArg = new long[call.arguments.length];
+        long[] paramForArg = new long[arguments.length];
         foreach (j, ai; binding.argForParam) if (ai >= 0) paramForArg[ai] = cast(long)j;
         string expectedFor(long j) {
             return params[j].type == DuendeType.AUTO ? "" : renderParamType(params[j]);
         }
 
         string[] argCode;
-        argCode.length = call.arguments.length;
+        argCode.length = arguments.length;
         string temps;
         if (needsTemps) {
             int id = ++matchCounter;
-            foreach (i, a; call.arguments) {
+            foreach (i, a; arguments) {
                 string code = generateExpected(expectedFor(paramForArg[i]), a);
                 if (isEffectFreeArgument(a)) { argCode[i] = code; continue; }
                 string tmp = format("__du_arg_%s_%s", id, i);
@@ -816,7 +823,7 @@ mixin template DExpressionsMixin() {
                 argCode[i] = tmp;
             }
         } else {
-            foreach (i, a; call.arguments) argCode[i] = generateExpected(expectedFor(paramForArg[i]), a);
+            foreach (i, a; arguments) argCode[i] = generateExpected(expectedFor(paramForArg[i]), a);
         }
 
         string[] parts;
@@ -824,7 +831,7 @@ mixin template DExpressionsMixin() {
             long ai = binding.argForParam[j];
             parts ~= ai >= 0 ? argCode[ai] : generateExpected(expectedFor(j), params[j].defaultValue);
         }
-        string direct = call.name ~ "(" ~ parts.join(", ") ~ ")";
+        string direct = callee ~ "(" ~ parts.join(", ") ~ ")";
         if (!needsTemps) return direct;
         return "(() { " ~ temps ~ "return " ~ direct ~ "; })()";
     }
@@ -1076,6 +1083,15 @@ mixin template DExpressionsMixin() {
      * Handles string methods, array methods, regex methods, etc.
      */
     private string generateMethodCall(MethodCallExpression method) {
+        if (method.argumentNames.canFind!(n => n.length > 0)) {
+            if (auto ve = cast(VariableExpression)method.object) {
+                string key = ve.name ~ "." ~ method.method;
+                if (auto params = key in importedSignatures) {
+                    string obj = generateExpression(method.object);
+                    return generateBoundCallee(obj ~ "." ~ method.method, method.arguments, method.argumentNames, *params);
+                }
+            }
+        }
         string obj = generateExpression(method.object);
         bool objIsRegex = isRegexExpression(method.object);
         bool objIsBytes = isBytesExpression(method.object);

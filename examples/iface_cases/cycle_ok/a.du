@@ -1,0 +1,7 @@
+import iface_cases.cycle_ok.b
+
+let int x = 1
+
+int fromB() do
+    return b.y
+end

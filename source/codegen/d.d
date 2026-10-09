@@ -39,6 +39,7 @@ class DCodeGenerator : CodeGenerator {
     private TypeNode exprExpectedNode; // Duende type expected of that expression, when known
     // Optional function/method signature registry to support named-args reordering at call sites
     private Parameter[][string] functionSignatures; // name -> params
+    private Parameter[][string] importedSignatures; // imported and qualified calls
     private Parameter[][string] methodSignatures;   // Type.method -> params (future)
     // When emitting module-level globals, defer non-constant initializers to run inside main
     private struct DeferredInit { string name; string expr; int pos; }
@@ -55,6 +56,10 @@ class DCodeGenerator : CodeGenerator {
     public string[] userAliasLines;    // Additional alias lines (e.g., symbol renames)
     public bool isLibraryModule = false; // If true, don't emit default main wrapper
     public bool includeStdMathHelpers = false; // Include Duende std.math helper wrappers
+
+    void noteImportedSignature(string name, Parameter[] parameters) {
+        importedSignatures[name] = parameters;
+    }
 
     // Mix in all the modular functionality
     mixin DTypeMixin;

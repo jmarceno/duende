@@ -1,0 +1,6 @@
+import iface_cases.assign.lib
+
+int main() do
+    print(lib.take("no"))
+    return 0
+end

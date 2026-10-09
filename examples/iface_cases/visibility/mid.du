@@ -1,0 +1,5 @@
+private import iface_cases.visibility.inner
+
+int shown() do
+    return inner.hidden()
+end

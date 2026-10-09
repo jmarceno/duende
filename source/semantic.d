@@ -2,6 +2,7 @@ module duende.semantic;
 
 import duende.ast;
 import duende.binding : bindArguments;
+import duende.iface;
 import std.algorithm : canFind;
 import std.conv : to;
 import std.array : appender;
@@ -171,25 +172,34 @@ class SemanticAnalyzer {
 	private size_t maxDepth = 10_000;
 	// whether module has any imports (providers may inject symbols)
 	private bool hasImports;
+	private ImportView imports;
+	private string[string] moduleOf;
+	private bool[string] installedModules;
+	private ExportSymbol[string] importedFns;
+	private ExportSymbol[string] importedTypes;
 	private TypeNode currentReturn;
 	private bool hasCurrentReturn;
 	private string currentFunctionName;
 
 	private string resolveEnumForValue(string valueName) {
 		foreach (enumName, vals; enums) {
-			if (vals.canFind(valueName)) return enumName;
+			if (vals.canFind(valueName)) {
+				if (auto sym = enumName in importedTypes) return sym.type.name;
+				return enumName;
+			}
 		}
 		return null;
 	}
 
-	void analyzeModule(Program prog, string moduleName, string sourcePath, SemanticErrorCollector errs, string[] moduleQualifiers = null) {
+	void analyzeModule(Program prog, string moduleName, string sourcePath, SemanticErrorCollector errs, ImportView view = ImportView.init) {
 		if (prog is null) return;
+		installImportView(view);
 		// Pass 1: collect functions and globals
 		foreach (s; prog.statements) {
 			if (auto f = cast(FunctionDeclaration)s) {
 				functions[f.name] = f;
 			} else if (auto v = cast(VariableDeclaration)s) {
-				globals[v.name] = Binding(declaredNode(v.typeNode, v.type, v.customTypeName), v.isMutable);
+				globals[v.name] = Binding(resolveDeclared(declaredNode(v.typeNode, v.type, v.customTypeName)), v.isMutable);
 			} else if (auto en = cast(EnumDeclaration)s) {
 				enums[en.name] = en.values.dup;
 			} else if (auto st = cast(StructDeclaration)s) {
@@ -209,9 +219,15 @@ class SemanticAnalyzer {
 		}
 		// Pass 2: analyze statements with a scope stack
 		ScopeEnv env;
-		foreach (name; moduleQualifiers) env.define(name, TypeNode.unknownType(), false);
-		// seed with globals
+		// seed with globals, then imported values that this module does not declare
 		foreach (k, b; globals) env.define(k, b.type, b.mutable);
+		foreach (name, sym; imports.symbols) {
+			if (sym.kind != ExportKind.variable) continue;
+			Binding existing;
+			if (env.lookup(name, existing)) continue;
+			TypeNode t = sym.status == ExportStatus.concrete ? sym.type : TypeNode.unknownType();
+			env.define(name, t, sym.mutable);
+		}
 		foreach (s; prog.statements) {
 			visitStmt(s, sourcePath, errs, env, 0);
 		}
@@ -221,7 +237,7 @@ class SemanticAnalyzer {
 		AggregateSymbol agg;
 		agg.isFrame = false;
 		foreach (fd; st.fields) {
-			agg.fields[fd.name] = FieldSymbol(declaredNode(fd.typeNode, fd.type, fd.customTypeName), false);
+			agg.fields[fd.name] = FieldSymbol(resolveDeclared(declaredNode(fd.typeNode, fd.type, fd.customTypeName)), false);
 		}
 		aggregates[st.name] = agg;
 	}
@@ -230,7 +246,7 @@ class SemanticAnalyzer {
 		AggregateSymbol agg;
 		agg.isFrame = true;
 		foreach (fd; fr.fields) {
-			agg.fields[fd.name] = FieldSymbol(declaredNode(fd.typeNode, fd.type, fd.customTypeName), fd.isMutable);
+			agg.fields[fd.name] = FieldSymbol(resolveDeclared(declaredNode(fd.typeNode, fd.type, fd.customTypeName)), fd.isMutable);
 		}
 		bool[string] direct;
 		foreach (m; fr.methods) {
@@ -272,7 +288,7 @@ class SemanticAnalyzer {
 		if (s is null) return;
 		if (depth > maxDepth) return; // safety
 		if (auto vd = cast(VariableDeclaration)s) {
-			auto ti = declaredNode(vd.typeNode, vd.type, vd.customTypeName);
+			auto ti = resolveDeclared(declaredNode(vd.typeNode, vd.type, vd.customTypeName));
 			if (ti.base == DuendeType.DICT) vd.typeNode = ti;
 			if (vd.initializer !is null) {
 				TypeNode expect = (ti.base == DuendeType.AUTO) ? TypeNode.init : ti;
@@ -311,12 +327,12 @@ class SemanticAnalyzer {
 			// function body: new scope with params
 			auto child = env.child();
 			foreach (p; f.parameters) {
-				child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName), true);
+				child.define(p.name, resolveDeclared(declaredNode(p.typeNode, p.type, p.customTypeName)), true);
 			}
 			auto savedReturn = currentReturn;
 			bool savedHas = hasCurrentReturn;
 			string savedName = currentFunctionName;
-			currentReturn = declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName);
+			currentReturn = resolveDeclared(declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName));
 			hasCurrentReturn = true;
 			currentFunctionName = f.name;
 			foreach (st; f.body) visitStmt(st, sourcePath, errs, child, depth + 1);
@@ -327,11 +343,11 @@ class SemanticAnalyzer {
 		}
 		if (auto m = cast(MethodDeclaration)s) {
 			auto child = env.child();
-			foreach (p; m.parameters) child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName), true);
+			foreach (p; m.parameters) child.define(p.name, resolveDeclared(declaredNode(p.typeNode, p.type, p.customTypeName)), true);
 			auto savedReturn = currentReturn;
 			bool savedHas = hasCurrentReturn;
 			string savedName = currentFunctionName;
-			currentReturn = declaredNode(m.returnTypeNode, m.returnType, null);
+			currentReturn = resolveDeclared(declaredNode(m.returnTypeNode, m.returnType, null));
 			hasCurrentReturn = true;
 			currentFunctionName = m.name;
 			foreach (st; m.body) visitStmt(st, sourcePath, errs, child, depth + 1);
@@ -527,6 +543,7 @@ class SemanticAnalyzer {
 			if (ve.name in enums) return typeInfo(DuendeType.CUSTOM, ve.name);
 			Binding b;
 			if (!env.lookup(ve.name, b)) {
+				if (auto mod = ve.name in moduleOf) return TypeNode.of(DuendeType.CUSTOM, "module " ~ *mod);
 				// Allow bare enum member usage (e.g., ACTIVE) by resolving to its enum type
 				auto en = resolveEnumForValue(ve.name);
 				if (en !is null) return typeInfo(DuendeType.CUSTOM, en);
@@ -573,11 +590,17 @@ class SemanticAnalyzer {
 			// Return type if known
 			if (ce.name in functions) {
 				auto f = functions[ce.name];
-				return declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName);
+				return resolveDeclared(declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName));
+			}
+			if (auto sym = ce.name in importedFns) {
+				if (sym.status == ExportStatus.concrete) return sym.type;
 			}
 			return TypeNode.unknownType();
 		}
 		if (auto me = cast(MethodCallExpression)e) {
+			string mod;
+			if (moduleOfExpr(me.object, env, mod))
+				return checkModuleCall(mod, me, sourcePath, errs, env, depth + 1);
 			// Not type-checking methods for now; just traverse
 			// But suppress undefined errors for provider type qualifiers (e.g., Terminal.method())
 			bool skipObject = false;
@@ -707,6 +730,9 @@ class SemanticAnalyzer {
 			return TypeNode.unknownType();
 		}
 		if (auto pe = cast(PropertyExpression)e) {
+			string mod;
+			if (moduleOfExpr(pe.object, env, mod))
+				return modulePropertyType(mod, pe, sourcePath, errs);
 			// Special-case: Enum access like Color.Red
 			if (auto ve = cast(VariableExpression)pe.object) {
 				if (auto valsPtr = ve.name in enums) {
@@ -716,6 +742,7 @@ class SemanticAnalyzer {
 						auto pos = normalizePos(pe.position, sourcePath);
 						errs.addError("Unknown enum value '" ~ pe.property ~ "' for enum '" ~ ve.name ~ "'", pos);
 					}
+					if (auto sym = ve.name in importedTypes) return sym.type;
 					// Expression type is the enum type itself
 					return typeInfo(DuendeType.CUSTOM, ve.name);
 				}
@@ -749,6 +776,9 @@ class SemanticAnalyzer {
 			return TypeNode.unknownType();
 		}
 		if (auto pae = cast(PropertyAssignmentExpression)e) {
+			string mod;
+			if (moduleOfExpr(pae.object, env, mod))
+				return assignModuleProperty(mod, pae, sourcePath, errs, env, depth + 1);
 			auto ot = visitExpr(pae.object, sourcePath, errs, env, depth + 1);
 			checkPropertyWrite(pae, ot, sourcePath, errs, env);
 			visitExpr(pae.value, sourcePath, errs, env, depth + 1);
@@ -832,6 +862,7 @@ class SemanticAnalyzer {
 		if (auto cc = cast(ConstructorCallExpression)e) {
 			foreach (a; cc.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
 			rejectNamedArguments(cc.argumentNames, cc.arguments, "constructor '" ~ cc.typeName ~ "'", sourcePath, errs);
+			if (auto sym = cc.typeName in importedTypes) return sym.type;
 			return typeInfo(DuendeType.CUSTOM, cc.typeName);
 		}
 		if (auto ce2 = cast(CastExpression)e) {
@@ -883,11 +914,11 @@ class SemanticAnalyzer {
 	private void visitMethod(MethodDeclaration m, string typeName, bool isFrame, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
 		auto child = env.child();
 		child.define("this", typeInfo(DuendeType.CUSTOM, typeName), isFrame);
-		foreach (p; m.parameters) child.define(p.name, declaredNode(p.typeNode, p.type, p.customTypeName), true);
+		foreach (p; m.parameters) child.define(p.name, resolveDeclared(declaredNode(p.typeNode, p.type, p.customTypeName)), true);
 		auto savedReturn = currentReturn;
 		bool savedHas = hasCurrentReturn;
 		string savedName = currentFunctionName;
-		currentReturn = declaredNode(m.returnTypeNode, m.returnType, null);
+		currentReturn = resolveDeclared(declaredNode(m.returnTypeNode, m.returnType, null));
 		hasCurrentReturn = true;
 		currentFunctionName = m.name;
 		foreach (st; m.body) visitStmt(st, sourcePath, errs, child, depth + 1);
@@ -1271,48 +1302,202 @@ class SemanticAnalyzer {
 	}
 
 	private void checkFunctionCall(CallExpression ce, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
-		// Only check functions declared in this module; ignore providers/builtins
-		if (!(ce.name in functions)) {
-			// Named arguments are bound against the callee's declared parameters, which are only known
-			// for functions declared in this module; elsewhere they would be silently passed positionally
-			foreach (i, an; ce.argumentNames) {
-				if (an.length) {
-					errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': named arguments require a function declared in this module", getExprPos(ce.arguments[i], sourcePath));
-				}
+		if (ce.name in functions) {
+			auto f = functions[ce.name];
+			Parameter[] params;
+			foreach (p; f.parameters) {
+				Parameter q = p;
+				q.typeNode = resolveDeclared(declaredNode(p.typeNode, p.type, p.customTypeName));
+				params ~= q;
 			}
-			// Builtins and provider calls still evaluate every argument expression.
-			foreach (arg; ce.arguments) visitExpr(arg, sourcePath, errs, env, depth + 1);
+			checkSignature(ce.name, params, ce.arguments, ce.argumentNames, ce.position, sourcePath, errs, env, depth);
 			return;
 		}
-		auto f = functions[ce.name];
+		if (auto sym = ce.name in importedFns) {
+			checkSignature(ce.name, sym.parameters, ce.arguments, ce.argumentNames, ce.position, sourcePath, errs, env, depth);
+			return;
+		}
+		// Named arguments are bound against the callee's declared parameters, which are only known
+		// for Duende functions; elsewhere they would be silently passed positionally
+		foreach (i, an; ce.argumentNames) {
+			if (an.length) {
+				errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': named arguments require a function declared in this module or imported from one", getExprPos(ce.arguments[i], sourcePath));
+			}
+		}
+		// Builtins and provider calls still evaluate every argument expression.
+		foreach (arg; ce.arguments) visitExpr(arg, sourcePath, errs, env, depth + 1);
+	}
 
-		auto binding = bindArguments(ce.name, f.parameters, ce.arguments.length, ce.argumentNames);
+	private void checkSignature(string name, Parameter[] params, Expression[] arguments, string[] argumentNames, SourcePosition callPos, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		auto binding = bindArguments(name, params, arguments.length, argumentNames);
 		foreach (be; binding.errors) {
-			auto pos = be.argIndex >= 0 ? getExprPos(ce.arguments[be.argIndex], sourcePath) : normalizePos(ce.position, sourcePath);
+			auto pos = be.argIndex >= 0 ? getExprPos(arguments[be.argIndex], sourcePath) : normalizePos(callPos, sourcePath);
 			errs.addError(be.message, pos);
 		}
-
-		// Type-check every supplied argument once, in source order
-		long[] paramForArg = new long[ce.arguments.length];
+		long[] paramForArg = new long[arguments.length];
 		paramForArg[] = -1;
 		foreach (j, ai; binding.argForParam) if (ai >= 0) paramForArg[ai] = cast(long)j;
-		foreach (i, arg; ce.arguments) {
+		foreach (i, arg; arguments) {
 			if (paramForArg[i] < 0) {
 				visitExpr(arg, sourcePath, errs, env, depth + 1);
 				continue;
 			}
-			auto need = f.parameters[paramForArg[i]];
+			auto need = params[paramForArg[i]];
 			auto needType = declaredNode(need.typeNode, need.type, need.customTypeName);
 			auto got = visitExpr(arg, sourcePath, errs, env, depth + 1, needType);
 			if (!typeCompatible(needType, got)) {
-				errs.addError("Argument type mismatch for parameter '" ~ need.name ~ "' in call to '" ~ ce.name ~ "'", getExprPos(arg, sourcePath));
+				errs.addError("Argument type mismatch for parameter '" ~ need.name ~ "' in call to '" ~ name ~ "'", getExprPos(arg, sourcePath));
 			}
 		}
+	}
+
+	private void installImportView(ImportView view) {
+		imports = view;
+		foreach (name, mod; view.modules) {
+			moduleOf[name] = mod;
+			installModuleTypes(mod);
+		}
+		foreach (name, sym; view.symbols) installImportedSymbol(name, sym);
+	}
+
+	private void installModuleTypes(string mod) {
+		if (mod in installedModules) return;
+		installedModules[mod] = true;
+		auto iface = mod in imports.ifaces;
+		if (iface is null) return;
+		foreach (sym; iface.symbols) {
+			if (sym.kind == ExportKind.aggregate) installAggregateExport(sym);
+			else if (sym.kind == ExportKind.enum_) enums[sym.type.name] = sym.enumValues.dup;
+		}
+	}
+
+	private void installImportedSymbol(string name, ExportSymbol sym) {
+		if (sym.kind == ExportKind.function_) importedFns[name] = sym;
+		else if (sym.kind == ExportKind.aggregate || sym.kind == ExportKind.enum_ || sym.kind == ExportKind.protocol) {
+			importedTypes[name] = sym;
+			if (sym.kind == ExportKind.aggregate) installAggregateExport(sym);
+			if (sym.kind == ExportKind.enum_) enums[name] = sym.enumValues.dup;
+		}
+	}
+
+	private void installAggregateExport(ExportSymbol sym) {
+		if (!sym.type.name.length) return;
+		AggregateSymbol agg;
+		agg.isFrame = sym.isFrame;
+		foreach (f; sym.fields) agg.fields[f.name] = FieldSymbol(f.type, f.mutable);
+		aggregates[sym.type.name] = agg;
+	}
+
+	private TypeNode resolveDeclared(TypeNode t) {
+		if (!t.present) return t;
+		TypeNode o = t;
+		o.args = t.args is null ? null : t.args.dup;
+		foreach (i, a; o.args) o.args[i] = resolveDeclared(a);
+		if (o.base == DuendeType.CUSTOM && o.name.length) {
+			if (auto sym = o.name in importedTypes) return sym.type;
+		}
+		if ((o.base == DuendeType.LIST || o.base == DuendeType.RESULT || o.base == DuendeType.MAYBE) && o.args.length && o.args[0].base == DuendeType.CUSTOM)
+			o.name = o.args[0].name;
+		return o;
+	}
+
+	private bool moduleOfExpr(Expression e, ref ScopeEnv env, out string mod) {
+		if (auto ve = cast(VariableExpression)e) {
+			Binding b;
+			if (env.lookup(ve.name, b)) return false;
+			if (auto m = ve.name in moduleOf) { mod = *m; return true; }
+			return false;
+		}
+		if (auto pe = cast(PropertyExpression)e) {
+			string parent;
+			if (!moduleOfExpr(pe.object, env, parent)) return false;
+			auto iface = parent in imports.ifaces;
+			if (iface is null) return false;
+			if (auto target = pe.property in iface.reexports) {
+				mod = *target;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private bool lookupPublic(string mod, string name, out ExportSymbol sym) {
+		auto iface = mod in imports.ifaces;
+		if (iface is null) return false;
+		auto found = name in iface.symbols;
+		if (found is null) return false;
+		sym = *found;
+		return true;
+	}
+
+	private string moduleLabel(Expression object, string mod) {
+		if (auto ve = cast(VariableExpression)object) return ve.name;
+		return mod;
+	}
+
+	private TypeNode modulePropertyType(string mod, PropertyExpression pe, string sourcePath, SemanticErrorCollector errs) {
+		ExportSymbol sym;
+		if (!lookupPublic(mod, pe.property, sym)) {
+			errs.addError("Module '" ~ moduleLabel(pe.object, mod) ~ "' has no public symbol '" ~ pe.property ~ "'", getExprPos(pe, sourcePath));
+			return TypeNode.unknownType();
+		}
+		if (sym.kind == ExportKind.variable) {
+			if (sym.status == ExportStatus.concrete) return sym.type;
+			return TypeNode.unknownType();
+		}
+		if (sym.kind == ExportKind.function_) return TypeNode.of(DuendeType.CUSTOM, "function");
+		if (sym.kind == ExportKind.aggregate || sym.kind == ExportKind.enum_ || sym.kind == ExportKind.protocol)
+			return sym.type;
+		return TypeNode.unknownType();
+	}
+
+	private TypeNode checkModuleCall(string mod, MethodCallExpression me, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		ExportSymbol sym;
+		if (!lookupPublic(mod, me.method, sym)) {
+			errs.addError("Module '" ~ moduleLabel(me.object, mod) ~ "' has no public symbol '" ~ me.method ~ "'", getExprPos(me, sourcePath));
+			foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+			return TypeNode.unknownType();
+		}
+		if (sym.kind == ExportKind.function_) {
+			checkSignature(me.method, sym.parameters, me.arguments, me.argumentNames, me.position, sourcePath, errs, env, depth);
+			if (sym.status == ExportStatus.concrete) return sym.type;
+			return TypeNode.unknownType();
+		}
+		if (sym.kind == ExportKind.aggregate || sym.kind == ExportKind.enum_) {
+			foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+			rejectNamedArguments(me.argumentNames, me.arguments, "constructor '" ~ me.method ~ "'", sourcePath, errs);
+			return sym.type;
+		}
+		foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+		errs.addError("'" ~ me.method ~ "' is not a function in module '" ~ moduleLabel(me.object, mod) ~ "'", getExprPos(me, sourcePath));
+		return TypeNode.unknownType();
+	}
+
+	private TypeNode assignModuleProperty(string mod, PropertyAssignmentExpression pae, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		ExportSymbol sym;
+		if (!lookupPublic(mod, pae.property, sym) || sym.kind != ExportKind.variable) {
+			if (!lookupPublic(mod, pae.property, sym))
+				errs.addError("Module '" ~ moduleLabel(pae.object, mod) ~ "' has no public symbol '" ~ pae.property ~ "'", getExprPos(pae, sourcePath));
+			else
+				errs.addError("Cannot assign to '" ~ pae.property ~ "'", getExprPos(pae, sourcePath));
+			visitExpr(pae.value, sourcePath, errs, env, depth + 1);
+			return TypeNode.unknownType();
+		}
+		TypeNode t = sym.status == ExportStatus.concrete ? sym.type : TypeNode.unknownType();
+		if (!sym.mutable)
+			errs.addError("Cannot assign to let binding '" ~ pae.property ~ "'", getExprPos(pae, sourcePath));
+		auto rhs = visitExpr(pae.value, sourcePath, errs, env, depth + 1, t);
+		if (sym.status == ExportStatus.concrete && !typeCompatible(t, rhs)) {
+			errs.addError(
+				"Assigned expression type does not match variable '" ~ pae.property ~ "' (need=" ~ typeInfoToString(t) ~ ", got=" ~ typeInfoToString(rhs) ~ ")",
+				getExprPos(pae, sourcePath));
+		}
+		return t;
 	}
 }
 
 // Public entrypoint used by the compiler
-void analyzeModule(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector, string[] moduleQualifiers = null) {
+void analyzeModule(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector, ImportView view = ImportView.init) {
 	auto analyzer = new SemanticAnalyzer();
-	analyzer.analyzeModule(program, moduleName, sourcePath, errorCollector, moduleQualifiers);
+	analyzer.analyzeModule(program, moduleName, sourcePath, errorCollector, view);
 }

@@ -95,7 +95,7 @@ end
         <pre><code>public import modules.testModule
 private import modules.otherModule { subtract }
 </code></pre>
-        <p><code>public import</code> re-exports a module's public API from the current module. <code>private import</code> keeps it internal (the default).</p>
+        <p><code>public import</code> re-exports the imported module's alias, so importers of this module can reach that module's public symbols through the alias. <code>private import</code> keeps the alias in the current module (the default). A later module that imports this one does not see a private import, and using one of its symbols is a compile error.</p>
       </section>
 
       <section class="panel">
@@ -109,6 +109,13 @@ private import modules.otherModule { subtract }
         <pre><code>3
 -2
 </code></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Typed interfaces</h2>
+        <p>Each module has a public interface. Functions, variables, structs, frames, enums, and protocols in the module are visible to importers with their declared types. A type you define belongs to that module: <code>Point</code> in <code>shapes.left</code> and <code>Point</code> in <code>shapes.right</code> are different types, even when the fields match. <code>list</code>, <code>dict</code>, <code>Result</code>, and <code>Maybe</code> are the same types in every module. Nested arguments are kept, so <code>list&lt;list&lt;int&gt;&gt;</code> imported from another module is still a list of int lists.</p>
+        <p>Parameter names and default values are part of an imported function. Calls can use those names and can omit parameters that have defaults. Assigning to an imported <code>let</code> is rejected. Assigning a value of the wrong type, or passing one to an imported function, is rejected.</p>
+        <p><code>let auto</code> and <code>var auto</code> exports take their type from the initializer when that type follows from declared types. If two modules import each other and each <code>auto</code> binding depends on the other, inference cannot choose a type. Declare the type on the binding. The compiler reports that error and does not treat the binding as an unknown type.</p>
       </section>
 
       <section class="panel">

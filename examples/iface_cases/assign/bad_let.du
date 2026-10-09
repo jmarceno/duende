@@ -1,0 +1,7 @@
+import iface_cases.assign.lib { fixed }
+
+int main() do
+    fixed = 3
+    lib.fixed = 4
+    return 0
+end

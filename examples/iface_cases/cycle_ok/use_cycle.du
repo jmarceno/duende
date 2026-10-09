@@ -1,0 +1,10 @@
+import iface_cases.cycle_ok.a
+import iface_cases.cycle_ok.b
+
+int main() do
+    print(a.x)
+    print(b.y)
+    print(a.fromB())
+    print(b.fromA())
+    return 0
+end

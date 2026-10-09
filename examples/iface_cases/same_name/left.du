@@ -1,0 +1,8 @@
+struct Point() do
+    let int x = 0
+    let int y = 0
+end
+
+Point make(int x, int y) do
+    return Point(x, y)
+end

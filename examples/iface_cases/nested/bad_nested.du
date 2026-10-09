@@ -1,0 +1,7 @@
+import iface_cases.nested.lib
+
+int main() do
+    let list<int> g = lib.grid()
+    print(g)
+    return 0
+end

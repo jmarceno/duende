@@ -1,0 +1,3 @@
+int hidden() do
+    return 7
+end

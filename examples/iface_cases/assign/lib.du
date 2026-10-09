@@ -1,0 +1,6 @@
+let int fixed = 1
+var int counter = 2
+
+int take(int n) do
+    return n
+end

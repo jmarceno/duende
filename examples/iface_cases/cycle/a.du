@@ -1,0 +1,3 @@
+import iface_cases.cycle.b
+
+let auto x = b.y

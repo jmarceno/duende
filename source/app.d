@@ -18,6 +18,7 @@ import duende.dub_integration;
 import duende.packages;
 import duende.buildinfo;
 import duende.semantic : analyzeModule, SemanticError, SemanticErrorCollector;
+import duende.iface;
 import std.datetime.stopwatch;
 import core.time : Duration; // for timing values
 import std.conv : to;
@@ -217,15 +218,18 @@ int main(string[] args) {
         auto swTranspile = StopWatch(AutoStart.yes);
     auto entry = graph.addEntry(sourceFile);
     graph.resolveAll();
+    graph.buildInterfaces();
 
         // Perform semantic validation on all modules
         auto semanticErrors = new SemanticErrorCollector();
+        foreach (err; graph.interfaceErrors)
+            semanticErrors.addError(err.message, err.file, err.line, err.column);
         foreach (mod; graph.order) {
             auto info = graph.modules[mod];
             // Set file path in source positions for this module
             string currentFile = info.sourcePath;
             
-            validateModuleSemantics(info, semanticErrors, graph.moduleQualifiers(info));
+            validateModuleSemantics(info, semanticErrors, graph.viewFor(mod));
         }
         
         // If there are semantic errors, report them and exit
@@ -499,6 +503,9 @@ class ModuleGraph {
     Program[string] astCache;            // sourcePath -> parsed Program
     ModuleInfo[string] modules;          // moduleName -> info
     string[] order;                      // topological or discovery order
+    ModuleInterface[string] interfaces;
+    ImportView[string] views;
+    InterfaceError[] interfaceErrors;
 
     this(string projectDir, string outputDir, bool verbose, Packages packages) {
         this.projectDir = projectDir;
@@ -672,26 +679,18 @@ class ModuleGraph {
         return tried;
     }
 
-    // The same module aliases emitted by codegen must be visible during semantic traversal.
-    string[] moduleQualifiers(ModuleInfo info) {
-        string[] names;
-        foreach (imp; info.imports) {
-            string mod = imp.modulePath.join(".");
-            if (mod !in modules) {
-                auto parts = info.moduleName.split(".");
-                if (parts.length > 1) mod = parts[0 .. $-1].join(".") ~ "." ~ mod;
-            }
-            if (mod !in modules) continue;
-            names ~= imp.moduleAlias.length ? imp.moduleAlias : imp.modulePath[$-1];
-            foreach (item; imp.items)
-                names ~= item.localAlias.length ? item.localAlias : item.name;
-            if (imp.isWildcard) names ~= exportedSymbolsFrom(modules[mod].program);
-            foreach (reimp; modules[mod].imports) {
-                if (reimp.isPublic)
-                    names ~= reimp.moduleAlias.length ? reimp.moduleAlias : reimp.modulePath[$-1];
-            }
+    void buildInterfaces() {
+        foreach (name, info; modules) {
+            interfaces[name] = declaredInterface(info.moduleName, info.sourcePath, info.program, info.imports);
         }
-        return names;
+        interfaces = buildModuleInterfaces(interfaces, interfaceErrors);
+        foreach (name, info; modules)
+            views[name] = importView(interfaces, info.moduleName, info.imports, interfaceErrors);
+    }
+
+    ImportView viewFor(string moduleName) {
+        if (auto v = moduleName in views) return *v;
+        return ImportView.init;
     }
 
     // Per-module D code generation
@@ -868,9 +867,46 @@ class ModuleGraph {
         }
         gen.userModuleImports = lines;
         gen.userAliasLines = aliasLines;
+        noteImportedSignatures(gen, info.moduleName);
 
         return gen.generate(info.program);
     }
+
+    private void noteImportedSignatures(DCodeGenerator gen, string moduleName) {
+        auto view = viewFor(moduleName);
+        foreach (name, sym; view.symbols) {
+            if (sym.kind == ExportKind.function_)
+                gen.noteImportedSignature(name, codegenParams(sym.parameters));
+        }
+        foreach (aliasName, mod; view.modules) {
+            auto iface = mod in interfaces;
+            if (iface is null) continue;
+            foreach (symName, sym; iface.symbols) {
+                if (sym.kind != ExportKind.function_) continue;
+                gen.noteImportedSignature(aliasName ~ "." ~ symName, codegenParams(sym.parameters));
+            }
+        }
+    }
+}
+
+private bool codegenTypeNeedsAuto(TypeNode t) {
+    if (t.base == DuendeType.CUSTOM && t.name.canFind(".")) return true;
+    foreach (a; t.args) if (codegenTypeNeedsAuto(a)) return true;
+    return false;
+}
+
+private Parameter[] codegenParams(Parameter[] parameters) {
+    Parameter[] copy;
+    foreach (p; parameters) {
+        Parameter q = p;
+        if (codegenTypeNeedsAuto(q.typeNode)) {
+            q.type = DuendeType.AUTO;
+            q.typeNode = TypeNode.init;
+            q.customTypeName = null;
+        }
+        copy ~= q;
+    }
+    return copy;
 }
 
 struct ModuleInfo {
@@ -993,9 +1029,9 @@ private void collectCallNames(Statement s, ref bool[string] names) {
 
 // ---------------- Semantic validation -----------------
 
-private void validateModuleSemantics(ModuleInfo info, SemanticErrorCollector errorCollector, string[] moduleQualifiers) {
+private void validateModuleSemantics(ModuleInfo info, SemanticErrorCollector errorCollector, ImportView view) {
     // Run modular analyzer (undefined vars, function calls, types)
-    analyzeModule(info.program, info.moduleName, info.sourcePath, errorCollector, moduleQualifiers);
+    analyzeModule(info.program, info.moduleName, info.sourcePath, errorCollector, view);
     // Run legacy checks preserved here
     validateBreakContinueUsage(info.program, info.moduleName, info.sourcePath, errorCollector);
     validateImportRequirements(info.program, info.moduleName, info.sourcePath, errorCollector);

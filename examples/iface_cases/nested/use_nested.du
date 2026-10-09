@@ -1,0 +1,15 @@
+import iface_cases.nested.lib
+
+int main() do
+    let auto g = lib.grid()
+    print(g[0][1])
+    let auto d = lib.groups()
+    print(d["a"][0])
+    var Result<list<int>> r = lib.numbers()
+    let list<int> xs = r ? else []
+    print(xs[1])
+    var Maybe<dict<string, int>> m = lib.labeled()
+    let dict<string, int> item = m ? else {"n": 0}
+    print(item["n"])
+    return 0
+end

@@ -1,0 +1,6 @@
+import iface_cases.visibility.mid
+
+int main() do
+    print(mid.shown())
+    return 0
+end
