@@ -2,6 +2,7 @@ module duende.semantic;
 
 import duende.ast;
 import duende.binding : bindArguments;
+import duende.builtins;
 import duende.iface;
 import std.algorithm : canFind;
 import std.conv : to;
@@ -107,6 +108,14 @@ private bool elementCompatible(TypeNode need, TypeNode got) {
 		if (!elementCompatible(arg, got.args[i])) return false;
 	}
 	return true;
+}
+
+// Result and Maybe are not strings, even though other values may convert to string.
+private bool slotCompatible(TypeNode need, TypeNode got) {
+	if (!isPermissive(need) && !isPermissive(got) && need.base != got.base) {
+		if (got.base == DuendeType.RESULT || got.base == DuendeType.MAYBE) return false;
+	}
+	return typeCompatible(need, got);
 }
 
 private bool typeCompatible(TypeNode need, TypeNode got) {
@@ -462,7 +471,7 @@ class SemanticAnalyzer {
 			bool haveSeen = false;
 			foreach (el; ll.elements) {
 				auto et = visitExpr(el, sourcePath, errs, env, depth + 1, checkElem ? elemExpected : TypeNode.init);
-				if (checkElem && !typeCompatible(elemExpected, et)) {
+				if (checkElem && !slotCompatible(elemExpected, et)) {
 					errs.addError(
 						"List element type does not match (need=" ~ typeInfoToString(elemExpected) ~ ", got=" ~ typeInfoToString(et) ~ ")",
 						getExprPos(el, sourcePath));
@@ -586,16 +595,7 @@ class SemanticAnalyzer {
 			return t;
 		}
 		if (auto ce = cast(CallExpression)e) {
-			checkFunctionCall(ce, sourcePath, errs, env, depth + 1);
-			// Return type if known
-			if (ce.name in functions) {
-				auto f = functions[ce.name];
-				return resolveDeclared(declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName));
-			}
-			if (auto sym = ce.name in importedFns) {
-				if (sym.status == ExportStatus.concrete) return sym.type;
-			}
-			return TypeNode.unknownType();
+			return checkFunctionCall(ce, sourcePath, errs, env, depth + 1);
 		}
 		if (auto me = cast(MethodCallExpression)e) {
 			string mod;
@@ -940,6 +940,9 @@ class SemanticAnalyzer {
 
 	private bool typeIsShared(TypeNode t) {
 		if (t.base == DuendeType.LIST || t.base == DuendeType.DICT || t.base == DuendeType.BYTES) return true;
+		if (t.base == DuendeType.RESULT || t.base == DuendeType.MAYBE) {
+			foreach (a; t.args) if (typeIsShared(a)) return true;
+		}
 		if (t.base == DuendeType.CUSTOM && t.name.length) {
 			if (auto agg = t.name in aggregates) return agg.isFrame;
 		}
@@ -1301,8 +1304,24 @@ class SemanticAnalyzer {
 		}
 	}
 
-	private void checkFunctionCall(CallExpression ce, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+	// A call name resolves in this order: a variable in scope, a function declared
+	// in this module, an imported Duende function, a builtin contract, then an
+	// unresolved provider call. Providers are not given a builtin signature.
+	private TypeNode checkFunctionCall(CallExpression ce, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		Binding bound;
+		if (env.lookup(ce.name, bound)) {
+			foreach (arg; ce.arguments) visitExpr(arg, sourcePath, errs, env, depth + 1);
+			// A lambda is still auto. A known value, such as an int named len, hides the builtin.
+			if (isPermissive(bound.type)) {
+				ce.calleeKind = CalleeKind.value;
+				return TypeNode.unknownType();
+			}
+			ce.calleeKind = CalleeKind.notAFunction;
+			errs.addError("'" ~ ce.name ~ "' is not a function", normalizePos(ce.position, sourcePath));
+			return TypeNode.unknownType();
+		}
 		if (ce.name in functions) {
+			ce.calleeKind = CalleeKind.userFunction;
 			auto f = functions[ce.name];
 			Parameter[] params;
 			foreach (p; f.parameters) {
@@ -1311,21 +1330,126 @@ class SemanticAnalyzer {
 				params ~= q;
 			}
 			checkSignature(ce.name, params, ce.arguments, ce.argumentNames, ce.position, sourcePath, errs, env, depth);
-			return;
+			return resolveDeclared(declaredNode(f.returnTypeNode, f.returnType, f.returnCustomTypeName));
 		}
 		if (auto sym = ce.name in importedFns) {
+			ce.calleeKind = CalleeKind.importedFunction;
 			checkSignature(ce.name, sym.parameters, ce.arguments, ce.argumentNames, ce.position, sourcePath, errs, env, depth);
-			return;
+			if (sym.status == ExportStatus.concrete) return sym.type;
+			return TypeNode.unknownType();
 		}
+		if (auto spec = findBuiltin(ce.name)) {
+			ce.calleeKind = CalleeKind.builtin;
+			return checkBuiltin(ce, *spec, sourcePath, errs, env, depth);
+		}
+		ce.calleeKind = CalleeKind.unresolved;
 		// Named arguments are bound against the callee's declared parameters, which are only known
-		// for Duende functions; elsewhere they would be silently passed positionally
+		// for Duende functions; elsewhere they would be silently passed positionally.
+		// Unresolved names are provider calls and stay unchecked (DU-12).
 		foreach (i, an; ce.argumentNames) {
 			if (an.length) {
 				errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': named arguments require a function declared in this module or imported from one", getExprPos(ce.arguments[i], sourcePath));
 			}
 		}
-		// Builtins and provider calls still evaluate every argument expression.
 		foreach (arg; ce.arguments) visitExpr(arg, sourcePath, errs, env, depth + 1);
+		return TypeNode.unknownType();
+	}
+
+	private TypeNode checkBuiltin(CallExpression ce, BuiltinContract spec, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		foreach (i, an; ce.argumentNames) {
+			if (an.length) {
+				errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': named arguments require a function declared in this module or imported from one", getExprPos(ce.arguments[i], sourcePath));
+			}
+		}
+		int argc = cast(int)ce.arguments.length;
+		int maxArgs = spec.variadic ? int.max : cast(int)spec.params.length;
+		if (argc > maxArgs) {
+			errs.addError("Too many arguments in call to '" ~ ce.name ~ "'", getExprPos(ce.arguments[spec.params.length], sourcePath));
+		} else if (argc < spec.minArgs) {
+			string missing = spec.params.length ? spec.params[argc].name : ce.name;
+			if (argc < cast(int)spec.params.length) missing = spec.params[argc].name;
+			errs.addError("Missing argument for parameter '" ~ missing ~ "' in call to '" ~ ce.name ~ "'", normalizePos(ce.position, sourcePath));
+		}
+		TypeNode[] got;
+		got.length = ce.arguments.length;
+		foreach (i, arg; ce.arguments) {
+			if (spec.params.length == 0 || (i >= spec.params.length && !spec.variadic)) {
+				visitExpr(arg, sourcePath, errs, env, depth + 1);
+				got[i] = TypeNode.unknownType();
+				continue;
+			}
+			BuiltinParam p = spec.params[i < spec.params.length ? i : spec.params.length - 1];
+			if (p.accept == BuiltinAccept.typeArg) {
+				if (cast(TypeLiteralExpression)arg is null)
+					visitExpr(arg, sourcePath, errs, env, depth + 1);
+				got[i] = safeCastTarget(arg, sourcePath, errs);
+				continue;
+			}
+			TypeNode expect;
+			if (p.accept == BuiltinAccept.exact) expect = p.type;
+			got[i] = visitExpr(arg, sourcePath, errs, env, depth + 1, expect);
+			if (!builtinArgOk(p, got[i])) {
+				errs.addError("Argument type mismatch for parameter '" ~ p.name ~ "' in call to '" ~ ce.name ~ "'", getExprPos(arg, sourcePath));
+			}
+		}
+		return builtinResult(spec, got);
+	}
+
+	private bool builtinArgOk(BuiltinParam p, TypeNode got) {
+		if (isPermissive(got)) return true;
+		if (p.accept == BuiltinAccept.any || p.accept == BuiltinAccept.typeArg) return true;
+		if (p.accept == BuiltinAccept.exact) return slotCompatible(p.type, got);
+		if (p.accept == BuiltinAccept.number)
+			return got.base == DuendeType.INT || got.base == DuendeType.FLOAT;
+		if (p.accept == BuiltinAccept.lenSubject)
+			return got.base == DuendeType.STRING || got.base == DuendeType.BYTES || got.base == DuendeType.LIST || got.base == DuendeType.DICT;
+		return false;
+	}
+
+	private TypeNode safeCastTarget(Expression arg, string sourcePath, SemanticErrorCollector errs) {
+		DuendeType t = DuendeType.AUTO;
+		bool ok = false;
+		if (auto tl = cast(TypeLiteralExpression)arg) {
+			t = tl.type;
+			ok = true;
+		} else if (auto ve = cast(VariableExpression)arg) {
+			if (ve.name == "int") { t = DuendeType.INT; ok = true; }
+			else if (ve.name == "float") { t = DuendeType.FLOAT; ok = true; }
+			else if (ve.name == "string") { t = DuendeType.STRING; ok = true; }
+			else if (ve.name == "bool") { t = DuendeType.BOOL; ok = true; }
+			else if (ve.name == "bytes") { t = DuendeType.BYTES; ok = true; }
+		}
+		if (!ok || (t != DuendeType.INT && t != DuendeType.FLOAT && t != DuendeType.STRING && t != DuendeType.BOOL && t != DuendeType.BYTES)) {
+			errs.addError("safeCast requires a type as its first argument", getExprPos(arg, sourcePath));
+			return TypeNode.unknownType();
+		}
+		return TypeNode.generic(DuendeType.RESULT, [typeInfo(t)]);
+	}
+
+	private TypeNode builtinResult(BuiltinContract spec, TypeNode[] got) {
+		if (spec.retKind == BuiltinReturnKind.fixed) return spec.result;
+		if (spec.retKind == BuiltinReturnKind.castResult) {
+			if (got.length && got[0].present && !got[0].unknown) return got[0];
+			return TypeNode.unknownType();
+		}
+		if (spec.retKind == BuiltinReturnKind.sameNumber) {
+			if (got.length && !isPermissive(got[0]) && (got[0].base == DuendeType.INT || got[0].base == DuendeType.FLOAT))
+				return typeInfo(got[0].base);
+			return TypeNode.unknownType();
+		}
+		if (spec.retKind == BuiltinReturnKind.widerNumber) {
+			bool any = false;
+			bool flt = false;
+			bool unk = false;
+			foreach (g; got) {
+				if (isPermissive(g)) { unk = true; continue; }
+				if (g.base == DuendeType.FLOAT) { flt = true; any = true; }
+				else if (g.base == DuendeType.INT) any = true;
+			}
+			if (unk || !any) return TypeNode.unknownType();
+			return typeInfo(flt ? DuendeType.FLOAT : DuendeType.INT);
+		}
+		return TypeNode.unknownType();
 	}
 
 	private void checkSignature(string name, Parameter[] params, Expression[] arguments, string[] argumentNames, SourcePosition callPos, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {

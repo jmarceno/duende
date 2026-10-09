@@ -1,0 +1,4 @@
+int main() do
+    let Result<list<int>> xs = readLines("x")
+    return 0
+end

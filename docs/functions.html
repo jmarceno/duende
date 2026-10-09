@@ -98,6 +98,23 @@ print(add3(1, c: 7))               // 1 + 10 + 7 = 18
 print(add3(c: note("c", 3), a: note("a", 1)))   // evaluates c, then a; prints 1 + 10 + 3 = 14
 </code></pre>
 
+      <h2>Built-ins and shadowing</h2>
+      <p>A call looks up its name in this order:</p>
+      <ul>
+        <li>A variable with a known type (a local, a parameter, a global, or an imported variable) hides a function or built-in with that name. Calling it is a compile error. Reading it uses the variable. A lambda kept in a variable is called as that value.</li>
+        <li>A function declared in this module.</li>
+        <li>A function imported from another Duende module.</li>
+        <li>A built-in with a known signature, such as <code>print</code>, <code>len</code>, <code>readText</code>, or <code>now</code>.</li>
+        <li>Any other name is an unresolved provider call. Duende does not invent a signature for it.</li>
+      </ul>
+      <p>Built-ins take positional arguments only. The compiler checks the argument count and the argument types, including nested <code>Result</code>, <code>Maybe</code>, <code>list</code>, and <code>dict</code> types, before it generates D. Each argument is evaluated once, from left to right. A built-in that can fail returns <code>Result</code>. Math functions are built-ins and still require <code>import std.math</code>.</p>
+      <pre><code>int len(string s) do
+    return 7
+end
+
+print(len("ab"))    // 7, the function above, not the built-in length
+</code></pre>
+
       <h2>Calling</h2>
       <pre><code>let int s = add(7, 8)
 greet("Duende")

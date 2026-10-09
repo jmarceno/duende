@@ -490,12 +490,25 @@ class VariableExpression : Expression {
     }
 }
 
+// What a call name resolved to. Code generation lowers this identity
+// instead of guessing from the spelling of the name.
+enum CalleeKind {
+    unset,
+    userFunction,
+    importedFunction,
+    builtin,
+    notAFunction,
+    value,
+    unresolved
+}
+
 class CallExpression : Expression {
     mixin PositionMixin;
     string name;
     Expression[] arguments;
     // Optional names for arguments; empty string for positional
     string[] argumentNames;
+    CalleeKind calleeKind;
 
     this(string name, Expression[] arguments, string[] argumentNames = null) {
         this.name = name;

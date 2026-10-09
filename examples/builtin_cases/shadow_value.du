@@ -1,0 +1,5 @@
+int main() do
+    let int len = 3
+    print(len)
+    return 0
+end

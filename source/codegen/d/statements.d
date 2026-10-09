@@ -45,6 +45,9 @@ mixin template DStatementsMixin() {
             // Suppress auto-print for side-effect-only builtins
             bool suppressPrint = false;
             if (auto call = cast(CallExpression)exprStmt.expression) {
+                if (call.calleeKind != CalleeKind.builtin && call.calleeKind != CalleeKind.unset) {
+                    suppressPrint = false;
+                } else {
                 immutable suppressNames = [
                     "writeText", "writeBytes", "appendText", "appendBytes",
                     "writeLines", "appendLines", "deleteFile", "makeDir",
@@ -52,6 +55,7 @@ mixin template DStatementsMixin() {
                 ];
                 foreach (name; suppressNames) {
                     if (call.name == name) { suppressPrint = true; break; }
+                }
                 }
             }
             if (suppressPrint) {
@@ -229,7 +233,7 @@ mixin template DStatementsMixin() {
                     trackedType = DuendeType.REGEX;
                 }
                 // Identify date/time-producing calls
-                if (isDateConstructorCall(initCall) || initCall.name == "toUTC" || initCall.name == "toLocal" || initCall.name == "toTZ" || initCall.name == "addDays" || initCall.name == "addHours" || initCall.name == "addMinutes" || initCall.name == "addSeconds") {
+                if ((initCall.calleeKind == CalleeKind.builtin || initCall.calleeKind == CalleeKind.unset) && (isDateConstructorCall(initCall) || initCall.name == "toUTC" || initCall.name == "toLocal" || initCall.name == "toTZ" || initCall.name == "addDays" || initCall.name == "addHours" || initCall.name == "addMinutes" || initCall.name == "addSeconds")) {
                     trackedType = DuendeType.DATE;
                 }
             } else if (cast(BytesLiteralExpression)varDecl.initializer !is null) {

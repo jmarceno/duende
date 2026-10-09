@@ -1,0 +1,5 @@
+int main() do
+    let auto len = { n -> n + 10 }
+    print(len(1))
+    return 0
+end

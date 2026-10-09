@@ -1,0 +1,4 @@
+int main() do
+    let Result<int> n = readText("x")
+    return 0
+end

@@ -1,0 +1,4 @@
+int main() do
+    writeLines("x", [Ok("a")])
+    return 0
+end

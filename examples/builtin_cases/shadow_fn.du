@@ -1,0 +1,8 @@
+int len(string s) do
+    return 7
+end
+
+int main() do
+    print(len("ab"))
+    return 0
+end

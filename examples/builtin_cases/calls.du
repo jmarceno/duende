@@ -1,0 +1,42 @@
+import std.math
+
+var int bumps = 0
+var int paths = 0
+
+int bump() do
+    bumps = bumps + 1
+    return bumps
+end
+
+string missing() do
+    paths = paths + 1
+    return "builtin-no-such-file-du17"
+end
+
+int main() do
+    print(len("hi"))
+    print(len([1, 2, 3]))
+    let Result<string> text = readText(missing())
+    match text do
+        Ok(v) -> print(v)
+        Error(e) -> print("text")
+    end
+    let Result<list<string>> lines = readLines("builtin-no-such-lines-du17")
+    match lines do
+        Ok(v) -> print(len(v))
+        Error(e) -> print("lines")
+    end
+    print(len([Ok(1), Ok(2)]))
+    print(len([Some(1), Some(2)]))
+    print(abs(-5))
+    print(min(bump(), bump()))
+    print(bumps)
+    print(fileExists(missing()))
+    print(paths)
+    let Result<int> casted = safeCast(int, "4")
+    match casted do
+        Ok(v) -> print(v)
+        Error(e) -> print(e)
+    end
+    return 0
+end

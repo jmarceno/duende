@@ -226,6 +226,9 @@ mixin template DExpressionsMixin() {
      * This handles print, input, math functions, date/time functions, file I/O, etc.
      */
     private string generateCallExpression(CallExpression call) {
+        // A resolved Duende function keeps its own identity, even when its name matches a builtin.
+        if (call.calleeKind == CalleeKind.userFunction || call.calleeKind == CalleeKind.importedFunction || call.calleeKind == CalleeKind.value)
+            return generateDirectCall(call);
         // Named arguments are placed by the shared binder (the same one semantic analysis validated)
         if (call.argumentNames.canFind!(n => n.length > 0)) {
             if (auto params = call.name in functionSignatures) {
@@ -645,26 +648,26 @@ mixin template DExpressionsMixin() {
             requiredImports["std.file"] = true; requiredImports["std.string"] = true;
             string p = call.arguments.length > 0 ? generateExpression(call.arguments[0]) : "\"\"";
             string arr = call.arguments.length > 1 ? generateExpression(call.arguments[1]) : "cast(string[])[]";
-            return "(() { try { string __joined = " ~ arr ~ ".length ? std.array.join(" ~ arr ~ ", \"\\n\") : \"\"; std.file.write(" ~ p ~ ", __joined); return Result!bool.ok(true); } catch (Exception e) { return Result!bool.error(e.msg); } })()";
+            return "(() { auto __du_p = " ~ p ~ "; auto __du_lines = " ~ arr ~ "; try { string __joined = __du_lines.length ? std.array.join(__du_lines, \"\\n\") : \"\"; std.file.write(__du_p, __joined); return Result!bool.ok(true); } catch (Exception e) { return Result!bool.error(e.msg); } })()";
         }
         // appendLines(path, string[]) -> Result!bool
         if (call.name == "appendLines") {
             requiredImports["std.file"] = true; requiredImports["std.string"] = true; requiredImports["std.array"] = true;
             string p = call.arguments.length > 0 ? generateExpression(call.arguments[0]) : "\"\"";
             string arr = call.arguments.length > 1 ? generateExpression(call.arguments[1]) : "cast(string[])[]";
-            return "(() { try { string __joined = " ~ arr ~ ".length ? std.array.join(" ~ arr ~ ", \"\\n\") : \"\"; std.file.append(" ~ p ~ ", __joined); return Result!bool.ok(true); } catch (Exception e) { return Result!bool.error(e.msg); } })()";
+            return "(() { auto __du_p = " ~ p ~ "; auto __du_lines = " ~ arr ~ "; try { string __joined = __du_lines.length ? std.array.join(__du_lines, \"\\n\") : \"\"; std.file.append(__du_p, __joined); return Result!bool.ok(true); } catch (Exception e) { return Result!bool.error(e.msg); } })()";
         }
         // fileExists(path) -> bool
         if (call.name == "fileExists") {
             requiredImports["std.file"] = true;
             string p = call.arguments.length > 0 ? generateExpression(call.arguments[0]) : "\"\"";
-            return "std.file.exists(" ~ p ~ ") && std.file.isFile(" ~ p ~ ")";
+            return "(() { auto __du_p = " ~ p ~ "; return std.file.exists(__du_p) && std.file.isFile(__du_p); })()";
         }
         // dirExists(path) -> bool
         if (call.name == "dirExists") {
             requiredImports["std.file"] = true;
             string p = call.arguments.length > 0 ? generateExpression(call.arguments[0]) : "\"\"";
-            return "std.file.exists(" ~ p ~ ") && std.file.isDir(" ~ p ~ ")";
+            return "(() { auto __du_p = " ~ p ~ "; return std.file.exists(__du_p) && std.file.isDir(__du_p); })()";
         }
         // deleteFile(path) -> Result!bool
         if (call.name == "deleteFile") {
@@ -705,7 +708,7 @@ mixin template DExpressionsMixin() {
         if (call.name == "getMetadata") {
             requiredImports["std.file"] = true; requiredImports["std.conv"] = true;
             string p = call.arguments.length > 0 ? generateExpression(call.arguments[0]) : "\"\"";
-            return "(() { try { string[string] m; m[\"isDir\"] = std.file.isDir(" ~ p ~ ").to!string; m[\"isFile\"] = std.file.isFile(" ~ p ~ ").to!string; m[\"size\"] = (cast(long)std.file.getSize(" ~ p ~ ")).to!string; return Result!(string[string]).ok(m); } catch (Exception e) { return Result!(string[string]).error(e.msg); } })()";
+            return "(() { auto __du_p = " ~ p ~ "; try { string[string] m; m[\"isDir\"] = std.file.isDir(__du_p).to!string; m[\"isFile\"] = std.file.isFile(__du_p).to!string; m[\"size\"] = (cast(long)std.file.getSize(__du_p)).to!string; return Result!(string[string]).ok(m); } catch (Exception e) { return Result!(string[string]).error(e.msg); } })()";
         }
         // joinPath(a, b, ...) -> string
         if (call.name == "joinPath") {
@@ -722,12 +725,12 @@ mixin template DExpressionsMixin() {
         if (call.name == "min") {
             string a = call.arguments.length > 0 ? generateExpression(call.arguments[0]) : "0";
             string b = call.arguments.length > 1 ? generateExpression(call.arguments[1]) : a;
-            return "((" ~ a ~ ") < (" ~ b ~ ") ? (" ~ a ~ ") : (" ~ b ~ "))";
+            return "(() { auto __du_a = " ~ a ~ "; auto __du_b = " ~ b ~ "; return __du_a < __du_b ? __du_a : __du_b; })()";
         }
         if (call.name == "max") {
             string a = call.arguments.length > 0 ? generateExpression(call.arguments[0]) : "0";
             string b = call.arguments.length > 1 ? generateExpression(call.arguments[1]) : a;
-            return "((" ~ a ~ ") > (" ~ b ~ ") ? (" ~ a ~ ") : (" ~ b ~ "))";
+            return "(() { auto __du_a = " ~ a ~ "; auto __du_b = " ~ b ~ "; return __du_a > __du_b ? __du_a : __du_b; })()";
         }
 
         // Default case: regular function call or constructor call for lowercase type names
@@ -758,6 +761,26 @@ mixin template DExpressionsMixin() {
     /**
      * Argument expression, typed from the callee parameter when the arguments line up.
      */
+    // Call a resolved Duende function. Builtin lowering must not see this name.
+    private string generateDirectCall(CallExpression call) {
+        if (call.argumentNames.canFind!(n => n.length > 0)) {
+            if (auto params = call.name in functionSignatures) {
+                return generateBoundCall(call, *params);
+            }
+            if (auto params = call.name in importedSignatures) {
+                return generateBoundCall(call, *params);
+            }
+        }
+        auto result = appender!string();
+        result ~= call.name ~ "(";
+        foreach (i, arg; call.arguments) {
+            if (i > 0) result ~= ", ";
+            result ~= generateCallArg(call.name, i, arg, true);
+        }
+        result ~= ")";
+        return result.data;
+    }
+
     private string generateCallArg(string callee, size_t index, Expression arg, bool aligned) {
         string expected;
         if (aligned) {
@@ -1448,6 +1471,7 @@ mixin template DExpressionsMixin() {
      * Check if a function call produces a date value.
      */
     private bool isDateConstructorCall(CallExpression call) {
+        if (call.calleeKind != CalleeKind.builtin && call.calleeKind != CalleeKind.unset) return false;
         return call.name == "date" || call.name == "dateTime" || call.name == "parseDate" || call.name == "now" || call.name == "utcNow";
     }
 
@@ -1461,6 +1485,7 @@ mixin template DExpressionsMixin() {
         if (auto call = cast(CallExpression)expr) {
             if (isDateConstructorCall(call)) return true;
             // Methods that return a date
+            if (call.calleeKind != CalleeKind.builtin && call.calleeKind != CalleeKind.unset) return false;
             if (call.name == "toUTC" || call.name == "toLocal" || call.name == "toTZ" || call.name == "addDays" || call.name == "addHours" || call.name == "addMinutes" || call.name == "addSeconds") return true;
         }
         if (auto pe = cast(PropertyExpression)expr) {

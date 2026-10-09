@@ -943,7 +943,9 @@ private void collectCallNames(Statement s, ref bool[string] names) {
     void visitExpr(Expression e) {
         if (e is null) return;
         if (auto ce = cast(CallExpression)e) {
-            names[ce.name] = true;
+            // A shadowed name is the user or imported function, not the builtin.
+            if (ce.calleeKind != CalleeKind.userFunction && ce.calleeKind != CalleeKind.importedFunction && ce.calleeKind != CalleeKind.notAFunction && ce.calleeKind != CalleeKind.value)
+                names[ce.name] = true;
             foreach (a; ce.arguments) visitExpr(a);
         } else if (auto be = cast(BinaryExpression)e) {
             visitExpr(be.left); visitExpr(be.right);

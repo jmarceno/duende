@@ -1,0 +1,6 @@
+import builtin_cases.shadow.lib { abs }
+
+int main() do
+    print(abs(-3))
+    return 0
+end
