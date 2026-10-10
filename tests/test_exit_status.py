@@ -50,3 +50,21 @@ def test_run_flag_returns_zero_for_successful_program():
     res = duende("-r", str(private_copy("variables.du", "variables_run")))
     assert res.returncode == 0, res.stdout + res.stderr
     assert res.stdout.strip() == "55"
+
+
+def test_panic_is_fatal_in_debug_and_release_builds():
+    for optimize in (False, True):
+        src = private_copy("panic.du", f"panic_{'release' if optimize else 'debug'}")
+        exe = src.parent / "duende_build" / src.stem
+        exe.unlink(missing_ok=True)
+        args = ["-O"] if optimize else []
+        compiled = duende(*args, str(src))
+        assert compiled.returncode == 0, compiled.stdout + compiled.stderr
+
+        for mode, expected in (([], "panic: at top level\n"),
+                               (["function"], "panic: inside function\n"),
+                               (["message"], "panic: side effect 1\n")):
+            ran = subprocess.run([str(exe), *mode], capture_output=True, text=True)
+            assert ran.returncode == 1
+            assert ran.stdout == ""
+            assert ran.stderr == expected

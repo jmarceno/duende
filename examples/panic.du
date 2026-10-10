@@ -1,0 +1,29 @@
+var int messageCalls = 0
+
+string messageWithSideEffect() do
+  messageCalls = messageCalls + 1
+  return "side effect ${messageCalls}"
+end
+
+void deferredPrint() do
+  print("deferred")
+end
+
+void panicInFunction() do
+  defer deferredPrint()
+  panic("inside function")
+  print("after function panic")
+end
+
+let list<string> modes = args()
+if modes.length == 0 do
+  panic("at top level")
+  print("after top-level panic")
+elif modes[0] == "function" do
+  panicInFunction()
+elif modes[0] == "message" do
+  panic(messageWithSideEffect())
+  print("after side effect panic")
+end
+
+print("after panic")

@@ -82,6 +82,9 @@ let string s2 = maybe_none ? else "default"
       <h2>Pattern matching</h2>
       <p>Match on <code>Ok(x)</code> and <code>Error(e)</code>. A match on a Result must handle both, or end with <code>_</code>. See <a href="pattern-matching.html">Pattern Matching</a>.</p>
 
+      <h2>panic</h2>
+      <p><code>panic(message)</code> is fatal and cannot be recovered. It evaluates <code>message</code> once, writes <code>panic: message</code> to standard error, and exits the process with status 1. It does not unwind Duende scopes, so pending <code>defer</code> calls do not run.</p>
+
       <div class="see-also">
         See also: <a href="file-io.html">File I/O</a>, <a href="pattern-matching.html">Pattern Matching</a>
       </div>

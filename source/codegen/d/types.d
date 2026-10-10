@@ -229,6 +229,6 @@ mixin template DTypeMixin() {
      * Used for unrecoverable errors.
      */
     private string generatePanicExpression(PanicExpression expr) {
-        return "(() { assert(false, " ~ generateExpression(expr.message) ~ "); return 0; })()";
+        return "(() { duende_panic(" ~ generateExpression(expr.message) ~ "); return 0; })()";
     }
 }

@@ -1,7 +1,8 @@
 module duende_runtime;
 
 import std.conv : to;
-import std.stdio : writeln;
+import std.stdio : stderr, writeln;
+import core.stdc.stdlib : exit;
 
 // String addition is concatenation; numeric addition keeps D's native result type.
 auto duende_add(L, R)(L left, R right) {
@@ -73,6 +74,14 @@ struct Maybe(T) {
 struct DictEntry(K, V) {
     K key;
     V value;
+}
+
+// Panic is fatal in every build mode. `exit` terminates without unwinding
+// Duende scopes, so deferred calls are not run.
+void duende_panic(string message) {
+    stderr.writeln("panic: ", message);
+    stderr.flush();
+    exit(1);
 }
 
 DictEntry!(K, V)[] duende_dict_items(K, V)(V[K] dict) {
