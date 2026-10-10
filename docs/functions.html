@@ -47,7 +47,7 @@ println("hi")
   <p>Under the hood, Duende emits D templates for functions with <code>auto</code> parameters, so you can pass values of any type without specifying the exact type.</p>
 
     <h2>Default parameters</h2>
-    <p>Parameters can have default values using <code>=</code>. Default parameters must come after all non-default parameters. Defaults must be compile-time constant expressions (literals, arithmetic on literals, simple casts) and must be type-compatible.</p>
+    <p>Parameters can have default values using <code>=</code>. Default parameters must come after all non-default parameters. A default must be a compile-time constant: a literal, arithmetic on literals, a simple cast, a constant list or dictionary, or a constant <code>Ok</code>, <code>Error</code>, <code>Some</code>, or <code>None</code>. It must match the parameter type, including nested <code>list</code>, <code>dict</code>, <code>Result</code>, and <code>Maybe</code> types. <code>Error</code> and <code>None</code> use that parameter type.</p>
     <pre><code>int multiply(int a, int b = 2) do
   return a * b
 end
@@ -92,7 +92,7 @@ print(add3(1, c: 7))               // 1 + 10 + 7 = 18
         <li>Named arguments bind to the parameter with that name; positional arguments then fill the remaining parameters from left to right, wherever they appear in the call.</li>
         <li>Every argument must bind to exactly one parameter. An unknown name, the same name twice, or more positional arguments than free parameters is a compile error, as is leaving out a parameter that has no default.</li>
         <li>Supplied arguments are evaluated exactly once, left to right in the order they are written, whatever parameter they bind to. Defaults for omitted parameters are evaluated after them.</li>
-        <li>Named arguments work for functions declared in this module and for functions imported from another Duende module. Calls to builtins, provider functions, methods, and constructors take positional arguments only; using names there is a compile error.</li>
+        <li>Named arguments work for functions declared in this module, for functions imported from another Duende module, and for provider functions that publish a signature. Built-ins, provider functions without a signature, methods, and constructors take positional arguments only. A name in one of those calls is a compile error and is not passed as a positional argument.</li>
       </ul>
       <pre><code>// note() records its tag and returns the value
 print(add3(c: note("c", 3), a: note("a", 1)))   // evaluates c, then a; prints 1 + 10 + 3 = 14
@@ -105,7 +105,8 @@ print(add3(c: note("c", 3), a: note("a", 1)))   // evaluates c, then a; prints 1
         <li>A function declared in this module.</li>
         <li>A function imported from another Duende module.</li>
         <li>A built-in with a known signature, such as <code>print</code>, <code>len</code>, <code>readText</code>, or <code>now</code>.</li>
-        <li>Any other name is an unresolved provider call. Duende does not invent a signature for it.</li>
+        <li>A provider function with a signature in its package manifest. The signature supplies parameter names, defaults, and argument and result types, including nested <code>list</code>, <code>dict</code>, <code>Result</code>, and <code>Maybe</code> types. <code>Ok</code>, <code>Error</code>, <code>Some</code>, and <code>None</code> use the parameter type.</li>
+        <li>Any other name is an opaque provider call. Duende does not invent a signature for it and does not check the argument count or types. A manifest entry that cannot be read as a function signature stays opaque as well: it does not become a checked function.</li>
       </ul>
       <p>Built-ins take positional arguments only. The compiler checks the argument count and the argument types, including nested <code>Result</code>, <code>Maybe</code>, <code>list</code>, and <code>dict</code> types, before it generates D. Each argument is evaluated once, from left to right. A built-in that can fail returns <code>Result</code>. Math functions are built-ins and still require <code>import std.math</code>.</p>
       <pre><code>int len(string s) do

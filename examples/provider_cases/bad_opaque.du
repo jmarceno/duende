@@ -1,0 +1,6 @@
+import fixture.sig
+
+int main() do
+    print(echo(1))
+    return 0
+end

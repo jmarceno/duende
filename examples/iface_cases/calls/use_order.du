@@ -1,0 +1,14 @@
+import iface_cases.calls.lib
+
+var string trace = ""
+
+int note(string tag, int value) do
+    trace = "${trace}${tag}"
+    return value
+end
+
+int main() do
+    print(lib.add3(c: note("c", 3), a: note("a", 1)))
+    print(trace)
+    return 0
+end

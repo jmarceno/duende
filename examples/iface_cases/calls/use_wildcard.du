@@ -1,0 +1,18 @@
+import iface_cases.calls.lib.*
+
+int main() do
+    print(add3(c: 3, a: 1))
+    var Result<list<int>> bad = take(Error("err"))
+    match bad do
+        Ok(xs) -> print("ok")
+        Error(e) -> print(e)
+    end
+    var Result<list<int>> good = take(Ok([4, 5]))
+    let list<int> xs = good ? else []
+    print(xs[0])
+    var Maybe<int> miss = pick(None)
+    let int n = miss ? else 0
+    print(n)
+    print(nest([[7, 8]]))
+    return 0
+end

@@ -1,0 +1,11 @@
+import iface_cases.calls.lib.*
+
+int main() do
+    print(add3(z: 1))
+    print(add3(a: 1, a: 2))
+    print(add3(1, 2, 3, 4))
+    print(add3())
+    print(nest([["no"]]))
+    print(take(Ok(["x"])))
+    return 0
+end

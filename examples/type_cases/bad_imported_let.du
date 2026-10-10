@@ -1,0 +1,8 @@
+import type_cases.lib { Counter, make }
+
+int main() do
+    let Counter c = make(0)
+    c.add(Ok(1))
+    print(c.value())
+    return 0
+end

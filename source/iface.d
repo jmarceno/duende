@@ -29,6 +29,13 @@ struct ExportField {
     bool mutable;
 }
 
+struct ExportMethod {
+    string name;
+    Parameter[] parameters;
+    TypeNode returnType;
+    bool mutating;
+}
+
 struct ExportSymbol {
     string name;
     ExportKind kind;
@@ -38,6 +45,7 @@ struct ExportSymbol {
     bool isFrame;
     Parameter[] parameters;
     ExportField[] fields;
+    ExportMethod[] methods;
     string[] enumValues;
     string moduleTarget;
     Expression initializer;
@@ -123,9 +131,9 @@ ModuleInterface declaredInterface(string moduleName, string sourcePath, Program 
             }
             iface.symbols[v.name] = sym;
         } else if (auto st = cast(StructDeclaration)s) {
-            iface.symbols[st.name] = aggregateSymbol(st.name, false, st.fields, null, moduleName, localTypes);
+            iface.symbols[st.name] = aggregateSymbol(st.name, false, st.fields, null, st.methods, null, moduleName, localTypes);
         } else if (auto fr = cast(FrameDeclaration)s) {
-            iface.symbols[fr.name] = aggregateSymbol(fr.name, true, null, fr.fields, moduleName, localTypes);
+            iface.symbols[fr.name] = aggregateSymbol(fr.name, true, null, fr.fields, fr.methods, mutatingMethodsOf(fr.methods), moduleName, localTypes);
         } else if (auto en = cast(EnumDeclaration)s) {
             ExportSymbol sym;
             sym.name = en.name;
@@ -391,7 +399,7 @@ private Infer inferSymbol(ExportSymbol sym) {
     return Infer.known(sym.type);
 }
 
-private ExportSymbol aggregateSymbol(string name, bool isFrame, Parameter[] structFields, VariableDeclaration[] frameFields, string moduleName, bool[string] localTypes) {
+private ExportSymbol aggregateSymbol(string name, bool isFrame, Parameter[] structFields, VariableDeclaration[] frameFields, MethodDeclaration[] methods, bool[string] mutating, string moduleName, bool[string] localTypes) {
     ExportSymbol sym;
     sym.name = name;
     sym.kind = ExportKind.aggregate;
@@ -416,7 +424,153 @@ private ExportSymbol aggregateSymbol(string name, bool isFrame, Parameter[] stru
             sym.fields ~= field;
         }
     }
+    foreach (m; methods) {
+        ExportMethod em;
+        em.name = m.name;
+        em.returnType = qualify(declared(m.returnTypeNode, m.returnType, null), moduleName, localTypes);
+        foreach (p; m.parameters) em.parameters ~= copyParam(p, moduleName, localTypes);
+        em.mutating = mutating !is null && (m.name in mutating) !is null;
+        sym.methods ~= em;
+    }
     return sym;
+}
+
+// Which frame methods write fields, including methods that call those methods on this.
+bool[string] mutatingMethodsOf(MethodDeclaration[] methods) {
+    bool[string] direct;
+    foreach (m; methods) {
+        if (methodAssignsThis(m)) direct[m.name] = true;
+    }
+    bool[string] mut = direct;
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        foreach (m; methods) {
+            if (m.name in mut) continue;
+            if (methodCallsMutatingThis(m, mut)) {
+                mut[m.name] = true;
+                changed = true;
+            }
+        }
+    }
+    return mut;
+}
+
+private bool methodAssignsThis(MethodDeclaration m) {
+    foreach (st; m.body) if (stmtWritesThis(st, null)) return true;
+    return false;
+}
+
+private bool methodCallsMutatingThis(MethodDeclaration m, bool[string] mut) {
+    foreach (st; m.body) if (stmtWritesThis(st, mut)) return true;
+    return false;
+}
+
+private bool stmtWritesThis(Statement s, bool[string] mut) {
+    if (s is null) return false;
+    if (auto vd = cast(VariableDeclaration)s) return exprWritesThis(vd.initializer, mut);
+    if (auto es = cast(ExpressionStatement)s) return exprWritesThis(es.expression, mut);
+    if (auto rs = cast(ReturnStatement)s) return exprWritesThis(rs.value, mut);
+    if (auto ds = cast(DeferStatement)s) return exprWritesThis(ds.call, mut);
+    if (auto ifs = cast(IfStatement)s) {
+        if (exprWritesThis(ifs.condition, mut)) return true;
+        foreach (st; ifs.thenBranch) if (stmtWritesThis(st, mut)) return true;
+        foreach (el; ifs.elifClauses) {
+            if (exprWritesThis(el.condition, mut)) return true;
+            foreach (st; el.body) if (stmtWritesThis(st, mut)) return true;
+        }
+        foreach (st; ifs.elseBranch) if (stmtWritesThis(st, mut)) return true;
+        return false;
+    }
+    if (auto fs = cast(ForStatement)s) {
+        if (exprWritesThis(fs.start, mut) || exprWritesThis(fs.end, mut)) return true;
+        foreach (st; fs.body) if (stmtWritesThis(st, mut)) return true;
+        return false;
+    }
+    if (auto fi = cast(ForInStatement)s) {
+        if (exprWritesThis(fi.iterable, mut)) return true;
+        foreach (st; fi.body) if (stmtWritesThis(st, mut)) return true;
+        return false;
+    }
+    if (auto ws = cast(WhileStatement)s) {
+        if (exprWritesThis(ws.condition, mut)) return true;
+        foreach (st; ws.body) if (stmtWritesThis(st, mut)) return true;
+        return false;
+    }
+    if (auto ms = cast(MatchStatement)s) {
+        if (exprWritesThis(ms.subject, mut)) return true;
+        foreach (c; ms.cases) {
+            if (auto ep = cast(ExpressionPattern)c.pattern) if (exprWritesThis(ep.expr, mut)) return true;
+            if (exprWritesThis(c.guard, mut)) return true;
+            foreach (st; c.body) if (stmtWritesThis(st, mut)) return true;
+        }
+        return false;
+    }
+    if (auto f = cast(FunctionDeclaration)s) {
+        foreach (st; f.body) if (stmtWritesThis(st, mut)) return true;
+    }
+    return false;
+}
+
+private bool exprWritesThis(Expression e, bool[string] mut) {
+    if (e is null) return false;
+    if (auto pa = cast(PropertyAssignmentExpression)e) {
+        if (auto ve = cast(VariableExpression)pa.object) {
+            if (ve.name == "this") return true;
+        }
+        return exprWritesThis(pa.object, mut) || exprWritesThis(pa.value, mut);
+    }
+    if (auto ia = cast(IndexAssignmentExpression)e)
+        return exprWritesThis(ia.object, mut) || exprWritesThis(ia.index, mut) || exprWritesThis(ia.value, mut);
+    if (auto mc = cast(MethodCallExpression)e) {
+        if (mut !is null) {
+            if (auto ve = cast(VariableExpression)mc.object) {
+                if (ve.name == "this" && (mc.method in mut)) return true;
+            }
+        }
+        if (exprWritesThis(mc.object, mut)) return true;
+        foreach (a; mc.arguments) if (exprWritesThis(a, mut)) return true;
+        return false;
+    }
+    if (auto ae = cast(AssignmentExpression)e) return exprWritesThis(ae.value, mut);
+    if (auto ce = cast(CallExpression)e) {
+        foreach (a; ce.arguments) if (exprWritesThis(a, mut)) return true;
+        return false;
+    }
+    if (auto be = cast(BinaryExpression)e) return exprWritesThis(be.left, mut) || exprWritesThis(be.right, mut);
+    if (auto ue = cast(UnaryExpression)e) return exprWritesThis(ue.operand, mut);
+    if (auto ie = cast(IndexExpression)e) return exprWritesThis(ie.object, mut) || exprWritesThis(ie.index, mut);
+    if (auto pe = cast(PropertyExpression)e) return exprWritesThis(pe.object, mut);
+    if (auto se = cast(StringInterpolationExpression)e) {
+        foreach (ex; se.expressions) if (exprWritesThis(ex, mut)) return true;
+        return false;
+    }
+    if (auto cc = cast(ConstructorCallExpression)e) {
+        foreach (a; cc.arguments) if (exprWritesThis(a, mut)) return true;
+        return false;
+    }
+    if (auto rc = cast(ResultConstructorExpression)e) return exprWritesThis(rc.value, mut);
+    if (auto mc2 = cast(MaybeConstructorExpression)e) return exprWritesThis(mc2.value, mut);
+    if (auto uw = cast(UnwrapExpression)e) return exprWritesThis(uw.result, mut) || exprWritesThis(uw.defaultValue, mut);
+    if (auto casted = cast(CastExpression)e) return exprWritesThis(casted.value, mut);
+    if (auto pe2 = cast(PanicExpression)e) return exprWritesThis(pe2.message, mut);
+    if (auto ll = cast(ListLiteralExpression)e) {
+        foreach (el; ll.elements) if (exprWritesThis(el, mut)) return true;
+    }
+    if (auto dl = cast(DictLiteralExpression)e) {
+        foreach (i, key; dl.keys) if (exprWritesThis(key, mut) || exprWritesThis(dl.values[i], mut)) return true;
+    }
+    if (auto te = cast(TryBlockExpression)e) {
+        foreach (st; te.statements) if (stmtWritesThis(st, mut)) return true;
+    }
+    if (auto me = cast(MatchExpression)e) {
+        if (exprWritesThis(me.subject, mut)) return true;
+        foreach (c; me.cases) {
+            if (auto ep = cast(ExpressionPattern)c.pattern) if (exprWritesThis(ep.expr, mut)) return true;
+            if (exprWritesThis(c.guard, mut) || exprWritesThis(c.value, mut)) return true;
+        }
+    }
+    return false;
 }
 
 private Parameter copyParam(Parameter p, string moduleName, bool[string] localTypes) {

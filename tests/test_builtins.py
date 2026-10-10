@@ -55,8 +55,8 @@ def test_builtin_rejected(name, diagnostic):
 
 
 def test_unknown_provider_has_no_builtin_signature():
-    # Provider signature checking is DU-12. This name must reach the D compiler
-    # instead of being rejected as a malformed builtin.
+    # This name has no provider signature, so the call stays opaque and must
+    # reach the D compiler instead of being rejected as a malformed builtin.
     source = ROOT / "examples" / "builtin_cases" / "errors" / "bad_provider.du"
     compiled = compile_program(source)
     output = compiled.stdout + compiled.stderr

@@ -1,0 +1,6 @@
+import fixture.broken
+
+int main() do
+    oops("x")
+    return 0
+end

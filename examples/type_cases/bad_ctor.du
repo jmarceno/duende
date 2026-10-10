@@ -1,0 +1,11 @@
+struct Row() do
+    let list<int> cells = [0]
+    let Result<int> mark = Ok(0)
+end
+
+int main() do
+    let Row extra = Row([1], Ok(1), 2)
+    let Row named = Row(cells: [1])
+    print(extra.cells[0] + named.cells[0])
+    return 0
+end

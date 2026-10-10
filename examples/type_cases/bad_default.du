@@ -1,0 +1,19 @@
+int calls() do
+    return 1
+end
+
+int wrong(list<int> xs = ["a"]) do
+    return 0
+end
+
+int later(int x = 1, int y) do
+    return y
+end
+
+int dyn(int x = calls()) do
+    return x
+end
+
+int main() do
+    return wrong() + later(1) + dyn()
+end

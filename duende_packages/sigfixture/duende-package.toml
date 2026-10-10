@@ -1,0 +1,13 @@
+name = "duende-sig-fixture"
+version = "0.1.0"
+
+description = "Fixture provider with one checked signature and one opaque function"
+
+[modules.fixture.sig]
+imports = ["duende_packages.sigfixture.checked"]
+helpers = ["checked.d"]
+aliases = { scale = "duende_packages.sigfixture.checked.scale", box = "duende_packages.sigfixture.checked.box", echo = "duende_packages.sigfixture.checked.echo" }
+signatures = [
+  "int scale(int n, int factor = 2)",
+  "Result<list<int>> box(Result<list<int>> value)"
+]

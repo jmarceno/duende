@@ -17,7 +17,7 @@ import duende.codegen_package;
 import duende.dub_integration;
 import duende.packages;
 import duende.buildinfo;
-import duende.semantic : analyzeModule, SemanticError, SemanticErrorCollector;
+import duende.semantic : analyzeModule, SemanticError, SemanticErrorCollector, CheckedProviderFn;
 import duende.iface;
 import std.datetime.stopwatch;
 import core.time : Duration; // for timing values
@@ -877,16 +877,59 @@ class ModuleGraph {
         foreach (name, sym; view.symbols) {
             if (sym.kind == ExportKind.function_)
                 gen.noteImportedSignature(name, codegenParams(sym.parameters));
+            else if (sym.kind == ExportKind.aggregate)
+                noteAggregate(gen, name, sym);
         }
         foreach (aliasName, mod; view.modules) {
             auto iface = mod in interfaces;
             if (iface is null) continue;
             foreach (symName, sym; iface.symbols) {
-                if (sym.kind != ExportKind.function_) continue;
-                gen.noteImportedSignature(aliasName ~ "." ~ symName, codegenParams(sym.parameters));
+                if (sym.kind == ExportKind.function_)
+                    gen.noteImportedSignature(aliasName ~ "." ~ symName, codegenParams(sym.parameters));
+                else if (sym.kind == ExportKind.aggregate) {
+                    gen.noteImportedSignature(aliasName ~ "." ~ symName, codegenParams(fieldParams(sym)));
+                    if (sym.type.name.length) noteAggregate(gen, sym.type.name, sym);
+                }
+            }
+        }
+        auto info = moduleName in modules;
+        if (info is null) return;
+        foreach (imp; info.imports) {
+            string dep = imp.modulePath.join(".");
+            auto prov = dep in info.externalProviders;
+            if (prov is null) continue;
+            foreach (sig; prov.entry.signatures) {
+                if (!sig.understood) continue;
+                string local = importedProviderName(imp, sig.name);
+                if (!local.length) continue;
+                gen.noteImportedSignature(local, codegenParams(sig.parameters));
             }
         }
     }
+}
+
+private void noteAggregate(DCodeGenerator gen, string typeName, ExportSymbol sym) {
+    if (!typeName.length) return;
+    auto fields = codegenParams(fieldParams(sym));
+    gen.noteConstructorSignature(typeName, fields);
+    foreach (m; sym.methods)
+        gen.noteMethodSignature(typeName ~ "." ~ m.name, codegenParams(m.parameters));
+    foreach (i, f; sym.fields) {
+        if (i < fields.length) gen.noteFieldSignature(typeName ~ "." ~ f.name, fields[i]);
+    }
+}
+
+private Parameter[] fieldParams(ExportSymbol sym) {
+    Parameter[] ps;
+    foreach (f; sym.fields) {
+        Parameter p;
+        p.name = f.name;
+        p.typeNode = f.type;
+        p.type = f.type.base;
+        if (f.type.base == DuendeType.CUSTOM) p.customTypeName = f.type.name;
+        ps ~= p;
+    }
+    return ps;
 }
 
 private bool codegenTypeNeedsAuto(TypeNode t) {
@@ -1033,109 +1076,58 @@ private void collectCallNames(Statement s, ref bool[string] names) {
 
 private void validateModuleSemantics(ModuleInfo info, SemanticErrorCollector errorCollector, ImportView view) {
     // Run modular analyzer (undefined vars, function calls, types)
-    analyzeModule(info.program, info.moduleName, info.sourcePath, errorCollector, view);
+    analyzeModule(info.program, info.moduleName, info.sourcePath, errorCollector, view, providerFunctions(info));
     // Run legacy checks preserved here
     validateBreakContinueUsage(info.program, info.moduleName, info.sourcePath, errorCollector);
     validateImportRequirements(info.program, info.moduleName, info.sourcePath, errorCollector);
-    validateDefaultParameters(info.program, info.sourcePath, errorCollector);
 }
 
-// -------- Default parameter validation --------
-private void validateDefaultParameters(Program program, string sourcePath, SemanticErrorCollector errorCollector) {
-    // Helpers
-    bool isConstExpr(Expression e) {
-        if (e is null) return false;
-        if (cast(LiteralExpression)e !is null) return true;
-        if (auto s = cast(StringInterpolationExpression)e) {
-            // Interpolations may contain expressions; only allow no expressions
-            return s.expressions.length == 0; // should be a plain string literal if allowed
-        }
-        if (cast(BytesLiteralExpression)e !is null) return true;
-        if (auto u = cast(UnaryExpression)e) {
-            // Allow unary +/- on const numeric
-            if (u.operator == "+" || u.operator == "-") return isConstExpr(u.operand);
-            return false;
-        }
-        if (auto b = cast(BinaryExpression)e) {
-            // Allow arithmetic on consts
-            immutable allowedOps = ["+","-","*","/","%"];
-            foreach (op; allowedOps) if (b.operator == op) {
-                return isConstExpr(b.left) && isConstExpr(b.right);
+private CheckedProviderFn[] providerFunctions(ModuleInfo info) {
+    CheckedProviderFn[] acc;
+    foreach (imp; info.imports) {
+        string dep = imp.modulePath.join(".");
+        auto prov = dep in info.externalProviders;
+        if (prov is null) continue;
+        int line = imp.position.line > 0 ? imp.position.line : 1;
+        int column = imp.position.column > 0 ? imp.position.column : 1;
+        foreach (sig; prov.entry.signatures) {
+            if (!sig.understood) {
+                CheckedProviderFn bad;
+                bad.understood = false;
+                bad.raw = sig.raw;
+                bad.line = line;
+                bad.column = column;
+                acc ~= bad;
+                continue;
             }
-            return false;
-        }
-        if (auto c = cast(CastExpression)e) {
-            return isConstExpr(c.value);
-        }
-        // Disallow calls, variables, method calls, list/dict/regex, match/try, result/maybe, etc.
-        return false;
-    }
-
-    DuendeType exprType(Expression e) {
-        if (e is null) return DuendeType.VOID;
-        if (auto lit = cast(LiteralExpression)e) return lit.type;
-        if (cast(BytesLiteralExpression)e !is null) return DuendeType.BYTES;
-        if (cast(StringInterpolationExpression)e !is null) return DuendeType.STRING; // only literal allowed by isConstExpr
-        if (auto u = cast(UnaryExpression)e) return exprType(u.operand);
-        if (auto b = cast(BinaryExpression)e) {
-            auto lt = exprType(b.left);
-            auto rt = exprType(b.right);
-            if ((lt == DuendeType.FLOAT) || (rt == DuendeType.FLOAT)) return DuendeType.FLOAT;
-            return DuendeType.INT;
-        }
-        if (auto c = cast(CastExpression)e) return c.targetType;
-        return DuendeType.VOID; // unknown
-    }
-
-    bool isTypeCompatible(DuendeType paramType, DuendeType exprT) {
-        if (paramType == exprT) return true;
-        // Allow numeric widening
-        if (paramType == DuendeType.FLOAT && exprT == DuendeType.INT) return true;
-        // Disallow others for now
-        return false;
-    }
-
-    void checkParams(Parameter[] params, string whereName) {
-        bool seenDefault = false;
-        foreach (i, p; params) {
-            if (p.defaultValue !is null) {
-                // Mark we saw a default; subsequent non-defaults are errors
-                seenDefault = true;
-                // Must be const expr
-                if (!isConstExpr(p.defaultValue)) {
-                    string msg = "Default value for parameter '" ~ p.name ~ "' in " ~ whereName ~ " must be a compile-time constant expression (no function calls or non-constant variables).";
-                    errorCollector.addError(msg, sourcePath, 1, 1);
-                } else {
-                    // Type-check
-                    auto et = exprType(p.defaultValue);
-                    if (!isTypeCompatible(p.type, et)) {
-                        string msg = "Default value for parameter '" ~ p.name ~ "' in " ~ whereName ~ " has incompatible type.";
-                        errorCollector.addError(msg, sourcePath, 1, 1);
-                    }
-                }
-            } else if (seenDefault) {
-                string msg = "Non-default parameter '" ~ p.name ~ "' cannot follow a parameter with a default value in " ~ whereName ~ ".";
-                errorCollector.addError(msg, sourcePath, 1, 1);
-            }
+            string local = importedProviderName(imp, sig.name);
+            if (!local.length) continue;
+            CheckedProviderFn fn;
+            fn.name = local;
+            fn.parameters = sig.parameters;
+            fn.result = sig.result;
+            fn.understood = true;
+            fn.raw = sig.raw;
+            fn.line = line;
+            fn.column = column;
+            acc ~= fn;
         }
     }
-
-    foreach (s; program.statements) {
-        if (auto f = cast(FunctionDeclaration)s) {
-            checkParams(f.parameters, "function '" ~ f.name ~ "'");
-        } else if (auto m = cast(MethodDeclaration)s) {
-            checkParams(m.parameters, "method '" ~ m.name ~ "'");
-        } else if (auto pr = cast(ProtocolDeclaration)s) {
-            foreach (ms; pr.methods) {
-                checkParams(ms.parameters, "protocol method '" ~ ms.name ~ "'");
-            }
-        } else if (auto st = cast(StructDeclaration)s) {
-            foreach (md; st.methods) checkParams(md.parameters, "struct method '" ~ md.name ~ "'");
-        } else if (auto fr = cast(FrameDeclaration)s) {
-            foreach (md; fr.methods) checkParams(md.parameters, "frame method '" ~ md.name ~ "'");
-        }
-    }
+    return acc;
 }
+
+// Empty when this import does not bring the checked name into scope.
+private string importedProviderName(ImportDeclaration imp, string name) {
+    if (imp.items.length) {
+        foreach (item; imp.items) {
+            if (item.name != name) continue;
+            return item.localAlias.length ? item.localAlias : item.name;
+        }
+        return null;
+    }
+    return name;
+}
+
 
 private void validateBreakContinueUsage(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector) {
     // Expressions can contain try closures at any depth. A closure starts its own loop context.

@@ -1,0 +1,18 @@
+frame Counter() do
+    var int n = 0
+
+    void add(Result<int> step) do
+        match step do
+            Ok(v) -> this.n = this.n + v
+            Error(e) -> this.n = this.n
+        end
+    end
+
+    int value() do
+        return this.n
+    end
+end
+
+Counter make(int n) do
+    return Counter(n)
+end

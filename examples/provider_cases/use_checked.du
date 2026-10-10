@@ -1,0 +1,16 @@
+import fixture.sig
+
+int main() do
+    print(scale(3))
+    print(scale(factor: 5, n: 4))
+    var Result<list<int>> bad = box(Error("no"))
+    match bad do
+        Ok(xs) -> print("ok")
+        Error(e) -> print(e)
+    end
+    var Result<list<int>> good = box(Ok([8]))
+    let list<int> xs = good ? else []
+    print(xs[0])
+    print(echo("hi"))
+    return 0
+end

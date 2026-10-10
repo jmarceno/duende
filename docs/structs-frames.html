@@ -72,6 +72,11 @@ p2.move(1.0, 1.0)
       </table>
       <p>These guarantees do not depend on annotations: a struct that implements a <a href="protocols.html">protocol</a> is still a value, and a frame is still a reference.</p>
 
+      <h2>Calls, fields, and defaults</h2>
+      <p>A constructor takes one positional argument per field, in declaration order. A method takes the positional arguments in its parameter list. Named arguments are a compile error on both, and they are not treated as positional arguments. Too many arguments, or a missing argument that has no default, is a compile error.</p>
+      <p>Argument types and field writes use the declared type, including nested <code>list</code>, <code>dict</code>, <code>Result</code>, and <code>Maybe</code>. <code>Ok</code>, <code>Error</code>, <code>Some</code>, and <code>None</code> use the type of that parameter or field. The receiver is evaluated once, then the arguments from left to right, then the default for each omitted parameter.</p>
+      <p>A method or function default follows the same type rules as a call. It has to be a compile-time constant, and a parameter with no default cannot follow one that has a default. A field initializer is checked against the field type. A method that assigns <code>this.field</code>, or that calls such a method on <code>this</code>, is a mutating method. That fact is part of the frame's type, including when another module imports the frame.</p>
+
       <div class="see-also">
         See also: <a href="variables.html">Variables</a>, <a href="protocols.html">Protocols</a>
       </div>

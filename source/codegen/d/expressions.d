@@ -85,7 +85,19 @@ mixin template DExpressionsMixin() {
             return assignment.variable ~ " = " ~ rhs;
         }
         if (auto propAssignment = cast(PropertyAssignmentExpression)expr) {
-            return generateExpression(propAssignment.object) ~ "." ~ propAssignment.property ~ " = " ~ generateExpression(propAssignment.value);
+            string obj = generateExpression(propAssignment.object);
+            string fieldExpected;
+            TypeNode node;
+            string typeName = receiverTypeName(propAssignment.object);
+            if (typeName.length) {
+                if (auto field = (typeName ~ "." ~ propAssignment.property) in fieldSignatures) {
+                    if (field.type != DuendeType.AUTO) {
+                        fieldExpected = renderParamType(*field);
+                        node = field.typeNode;
+                    }
+                }
+            }
+            return obj ~ "." ~ propAssignment.property ~ " = " ~ generateWithNode(node, fieldExpected, propAssignment.value);
         }
         if (auto indexAssignment = cast(IndexAssignmentExpression)expr) {
             return generateIndexAssignment(indexAssignment);
@@ -227,7 +239,7 @@ mixin template DExpressionsMixin() {
      */
     private string generateCallExpression(CallExpression call) {
         // A resolved Duende function keeps its own identity, even when its name matches a builtin.
-        if (call.calleeKind == CalleeKind.userFunction || call.calleeKind == CalleeKind.importedFunction || call.calleeKind == CalleeKind.value)
+        if (call.calleeKind == CalleeKind.userFunction || call.calleeKind == CalleeKind.importedFunction || call.calleeKind == CalleeKind.provider || call.calleeKind == CalleeKind.value)
             return generateDirectCall(call);
         // Named arguments are placed by the shared binder (the same one semantic analysis validated)
         if (call.argumentNames.canFind!(n => n.length > 0)) {
@@ -783,14 +795,18 @@ mixin template DExpressionsMixin() {
 
     private string generateCallArg(string callee, size_t index, Expression arg, bool aligned) {
         string expected;
+        TypeNode node;
         if (aligned) {
-            if (auto pList = callee in functionSignatures) {
-                auto params = *pList;
-                if (index < params.length && params[index].type != DuendeType.AUTO)
-                    expected = renderParamType(params[index]);
+            Parameter[] params;
+            bool found = false;
+            if (auto pList = callee in functionSignatures) { params = *pList; found = true; }
+            else if (auto pList = callee in importedSignatures) { params = *pList; found = true; }
+            if (found && index < params.length && params[index].type != DuendeType.AUTO) {
+                expected = renderParamType(params[index]);
+                node = params[index].typeNode;
             }
         }
-        return generateExpected(expected, arg);
+        return generateWithNode(node, expected, arg);
     }
 
     private string generateBoundCall(CallExpression call, Parameter[] params) {
@@ -1101,18 +1117,56 @@ mixin template DExpressionsMixin() {
         return format(`std.regex.regex(r"%s")`, regex.pattern);
     }
 
+    private string emitTypedArgs(Parameter[] params, Expression[] args) {
+        auto result = appender!string();
+        foreach (i, arg; args) {
+            if (i > 0) result ~= ", ";
+            string expected;
+            TypeNode node;
+            if (i < params.length && params[i].type != DuendeType.AUTO) {
+                expected = renderParamType(params[i]);
+                node = params[i].typeNode;
+            }
+            result ~= generateWithNode(node, expected, arg);
+        }
+        return result.data;
+    }
+
+    private string receiverTypeName(Expression obj) {
+        if (auto ve = cast(VariableExpression)obj) {
+            if (auto vi = ve.name in variableTypes) return typeLabel(*vi);
+            if (auto vi = ve.name in globalVarTypes) return typeLabel(*vi);
+        }
+        if (auto cc = cast(ConstructorCallExpression)obj) return cc.typeName;
+        return null;
+    }
+
+    private string typeLabel(VarInfo vi) {
+        if (vi.typeNode.present && vi.typeNode.base == DuendeType.CUSTOM && vi.typeNode.name.length)
+            return vi.typeNode.name;
+        if (vi.type == DuendeType.CUSTOM && vi.custom.length) return vi.custom;
+        return null;
+    }
+
     /**
      * Generate method calls on objects.
      * Handles string methods, array methods, regex methods, etc.
      */
     private string generateMethodCall(MethodCallExpression method) {
-        if (method.argumentNames.canFind!(n => n.length > 0)) {
-            if (auto ve = cast(VariableExpression)method.object) {
-                string key = ve.name ~ "." ~ method.method;
-                if (auto params = key in importedSignatures) {
-                    string obj = generateExpression(method.object);
+        if (auto ve = cast(VariableExpression)method.object) {
+            string key = ve.name ~ "." ~ method.method;
+            if (auto params = key in importedSignatures) {
+                string obj = generateExpression(method.object);
+                if (method.argumentNames.canFind!(n => n.length > 0))
                     return generateBoundCallee(obj ~ "." ~ method.method, method.arguments, method.argumentNames, *params);
-                }
+                return obj ~ "." ~ method.method ~ "(" ~ emitTypedArgs(*params, method.arguments) ~ ")";
+            }
+        }
+        string typeName = receiverTypeName(method.object);
+        if (typeName.length) {
+            if (auto params = (typeName ~ "." ~ method.method) in methodSignatures) {
+                string obj = generateExpression(method.object);
+                return obj ~ "." ~ method.method ~ "(" ~ emitTypedArgs(*params, method.arguments) ~ ")";
             }
         }
         string obj = generateExpression(method.object);
@@ -1369,9 +1423,13 @@ mixin template DExpressionsMixin() {
             result ~= constructor.typeName ~ "(";
         }
 
-        foreach (i, arg; constructor.arguments) {
-            if (i > 0) result ~= ", ";
-            result ~= generateExpression(arg);
+        if (auto fields = constructor.typeName in constructorSignatures)
+            result ~= emitTypedArgs(*fields, constructor.arguments);
+        else {
+            foreach (i, arg; constructor.arguments) {
+                if (i > 0) result ~= ", ";
+                result ~= generateExpression(arg);
+            }
         }
 
         result ~= ")";

@@ -1,0 +1,7 @@
+name = "duende-sig-broken"
+version = "0.1.0"
+
+[modules.fixture.broken]
+imports = ["std.stdio"]
+aliases = { oops = "writeln" }
+signatures = ["this is not a signature"]

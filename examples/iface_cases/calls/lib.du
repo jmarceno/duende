@@ -1,0 +1,15 @@
+int add3(int a, int b = 10, int c = 5) do
+    return a + b + c
+end
+
+Result<list<int>> take(Result<list<int>> value) do
+    return value
+end
+
+Maybe<int> pick(Maybe<int> value) do
+    return value
+end
+
+int nest(list<list<int>> rows) do
+    return rows[0][0]
+end

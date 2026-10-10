@@ -1,0 +1,11 @@
+import fixture.sig { scale, box }
+
+int main() do
+    print(scale(3))
+    var Result<list<int>> bad = box(Error("no"))
+    match bad do
+        Ok(xs) -> print(len(xs))
+        Error(e) -> print(e)
+    end
+    return 0
+end

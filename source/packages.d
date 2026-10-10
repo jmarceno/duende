@@ -8,6 +8,21 @@ import std.stdio;
 import std.process : environment;
 import duende.builtins_packages;
 import duende.pinned_versions;
+import duende.ast;
+import duende.lexer;
+import duende.parser;
+
+// A function the provider author asked Duende to check.
+// understood is false when the manifest text could not be read as a Duende
+// function signature. That function stays opaque: Duende does not invent a
+// signature and does not claim the call was validated.
+struct ProviderSignature {
+    string name;
+    Parameter[] parameters;
+    TypeNode result;
+    bool understood;
+    string raw;
+}
 
 struct ModuleMapEntry {
     string duendeModule;
@@ -16,6 +31,7 @@ struct ModuleMapEntry {
     string[] helpers;
     string[string] types;
     string[] reexports;
+    ProviderSignature[] signatures;
     string packageName;
     string pkgVersion;
     string[string] dubDeps;
@@ -151,6 +167,7 @@ class Packages {
                     e.helpers = sec.helpers.dup;
                     e.types = sec.types.dup;
                     e.reexports = sec.reexports.dup;
+                    e.signatures = sec.signatures.dup;
                     e.packageName = p.packageName;
                     e.pkgVersion = p.pkgVersion;
                     e.dubDeps = pm.dubDependencies.dup;
@@ -205,6 +222,7 @@ class Packages {
             e.helpers = sec.helpers.dup;
             e.types = sec.types.dup;
             e.reexports = sec.reexports.dup;
+            e.signatures = sec.signatures.dup;
             e.packageName = pm.name;
             e.pkgVersion = pm.pkgVersion;
             e.dubDeps = pm.dubDependencies.dup;
@@ -258,6 +276,7 @@ private struct ModuleSection {
     string[string] aliases;
     string[string] types;
     string[] reexports;
+    ProviderSignature[] signatures;
 }
 
 private PackageManifest parsePackageTOML(string toml) {
@@ -329,6 +348,9 @@ private PackageManifest parsePackageTOML(string toml) {
                 auto acc = collectBalanced(i, val, '{', '}');
                 auto mp = parseInlineTable(acc);
                 if (key == "aliases") m.aliases = mp; else m.types = mp;
+            } else if (key == "signatures") {
+                auto acc = collectBalanced(i, val, '[', ']');
+                foreach (raw; parseQuotedStringArray(acc)) m.signatures ~= readProviderSignature(raw);
             } else {
                 // Unknown key in module section: ignore
             }
@@ -358,6 +380,55 @@ private string[] parseStringArray(string v) {
     auto s = v.strip(); string[] arr; if (!(s.length >= 2 && s[0] == '[' && s[$-1] == ']')) return arr; s = s[1 .. $-1];
     foreach (part; s.split(',')) { auto p = stripQuotes(part.strip()); if (p.length) arr ~= p; } return arr;
 }
+private string[] parseQuotedStringArray(string v) {
+    auto s = v.strip();
+    string[] arr;
+    if (!(s.length >= 2 && s[0] == '[' && s[$-1] == ']')) return arr;
+    s = s[1 .. $-1];
+    string cur;
+    bool inStr = false;
+    foreach (ch; s) {
+        if (ch == '"') { inStr = !inStr; cur ~= ch; continue; }
+        if (ch == ',' && !inStr) {
+            auto p = stripQuotes(cur.strip());
+            if (p.length) arr ~= p;
+            cur = "";
+            continue;
+        }
+        cur ~= ch;
+    }
+    auto last = stripQuotes(cur.strip());
+    if (last.length) arr ~= last;
+    return arr;
+}
+
+// Reads one Duende function signature. A value that does not parse stays
+// opaque (understood = false) so unknown metadata is never treated as a checked contract.
+ProviderSignature readProviderSignature(string raw) {
+    ProviderSignature sig;
+    sig.raw = raw;
+    string src = raw.strip() ~ " do\nend\n";
+    try {
+        auto lx = new Lexer(src);
+        auto toks = lx.tokenize();
+        auto ps = new Parser(toks);
+        auto prog = ps.parse();
+        if (prog.statements.length == 1) {
+            if (auto f = cast(FunctionDeclaration)prog.statements[0]) {
+                if (f.name.length) {
+                    sig.name = f.name;
+                    sig.parameters = f.parameters;
+                    sig.result = f.returnTypeNode.present ? f.returnTypeNode : TypeNode.of(f.returnType, f.returnCustomTypeName);
+                    sig.understood = true;
+                    return sig;
+                }
+            }
+        }
+    } catch (Exception) {}
+    sig.understood = false;
+    return sig;
+}
+
 private string[string] parseInlineTable(string v) {
     auto s = v.strip(); string[string] map; if (!(s.length >= 2 && s[0] == '{' && s[$-1] == '}')) return map; s = s[1 .. $-1];
     foreach (pair; s.split(',')) { auto p = pair.strip(); if (!p.length) continue; auto eq = indexOfChar(p, '='); if (eq < 0) eq = indexOfChar(p, ':'); if (eq < 0) continue; auto k = stripQuotes(p[0 .. eq].strip()); auto val = stripQuotes(p[eq + 1 .. $].strip()); if (k.length) map[k] = val; } return map;

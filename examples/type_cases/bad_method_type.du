@@ -1,0 +1,15 @@
+struct Row() do
+    let list<int> cells = [0]
+    let Result<int> mark = Ok(0)
+
+    Row grow(list<int> extra) do
+        return Row(extra, Ok(1))
+    end
+end
+
+int main() do
+    let Row row = Row([1], Ok(1))
+    let Row next = row.grow(["x"])
+    print(next.cells[0])
+    return 0
+end

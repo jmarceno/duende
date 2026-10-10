@@ -1,0 +1,7 @@
+import fixture.sig.*
+
+int main() do
+    print(scale(n: 3))
+    print(echo("hi"))
+    return 0
+end

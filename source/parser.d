@@ -1071,11 +1071,11 @@ class Parser {
                 string fieldName = previous().value;
                 consume(TokenType.ASSIGN, "Expected '=' in field declaration");
 
-                // Skip the initializer for now - structs have default values
-                expression();
+                Expression init = expression();
 
                 Parameter field = Parameter(fieldName, fieldType, customTypeName, fieldNode.legacyInner(), false);
                 field.typeNode = fieldNode;
+                field.defaultValue = init;
                 fields ~= field;
             } else if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                           TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,

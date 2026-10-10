@@ -61,8 +61,18 @@ dependencies = { "toml-d" = "~>0.4.0" }
         <li><code>imports</code>: array of D modules to import in generated code.</li>
         <li><code>aliases</code>: inline table mapping friendly names to <code>module.symbol</code> (e.g., <code>{ println = "std.stdio.writeln" }</code>).</li>
         <li><code>helpers</code>: array of additional D source files to compile alongside generated code.</li>
+        <li><code>signatures</code> (optional): array of Duende function signatures to check. See below.</li>
         <li><code>[dub].dependencies</code> (optional): name→version map to include when building via dub.</li>
       </ul>
+
+      <h2>Checked signatures and opaque symbols</h2>
+      <p>A provider function is opaque unless its manifest lists a signature. Duende does not invent a parameter list for an opaque function, so it does not reject a wrong argument count or a wrong type. Named arguments are still rejected, because there are no parameter names to bind them to. A signature the compiler cannot read as a Duende function is also opaque: importing the module reports that the entry was not understood, and calls are not checked against a guessed contract.</p>
+      <p>A readable signature is a Duende function heading, with the same types, names, and defaults a function in a <code>.du</code> file would have:</p>
+      <pre><code>signatures = [
+  "int scale(int n, int factor = 2)",
+  "Result&lt;list&lt;int&gt;&gt; box(Result&lt;list&lt;int&gt;&gt; value)"
+]</code></pre>
+      <p>Calls to <code>scale</code> and <code>box</code> are then checked like imported Duende functions: arity, names, defaults, and nested types. <code>Error</code> and <code>None</code> use the parameter type. A function in the same module that is only an alias, with no signature entry, stays opaque. Built-in names such as <code>len</code> are still built-ins when both exist. A plain import, a selective import, and a wildcard import check the signatures they bring into scope.</p>
 
       <h2>Using a package</h2>
       <ol>

@@ -1,0 +1,9 @@
+import type_cases.lib { Counter, make }
+
+int main() do
+    var Counter c = make(1)
+    c.add(Error("skip"))
+    c.add(Ok(4))
+    print(c.value())
+    return 0
+end

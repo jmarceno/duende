@@ -151,6 +151,19 @@ private SourcePosition normalizePos(SourcePosition pos, string fileFallback) {
 	return p;
 }
 
+// A provider function whose manifest signature was readable.
+// understood is false for a signature entry that could not be parsed; that
+// entry must not be used to accept or reject call arguments.
+struct CheckedProviderFn {
+	string name;
+	Parameter[] parameters;
+	TypeNode result;
+	bool understood;
+	string raw;
+	int line;
+	int column;
+}
+
 // Analyzer
 class SemanticAnalyzer {
 	// function name -> declaration
@@ -164,10 +177,21 @@ class SemanticAnalyzer {
 		TypeNode type;
 		bool mutable;
 	}
+	private struct MethodSymbol {
+		Parameter[] parameters;
+		TypeNode returnType;
+		bool mutating;
+	}
 	private struct AggregateSymbol {
 		bool isFrame;
 		FieldSymbol[string] fields;
+		string[] fieldOrder;
+		MethodSymbol[string] methods;
 		bool[string] mutatingMethods;
+	}
+	private struct ProviderFn {
+		Parameter[] parameters;
+		TypeNode result;
 	}
 	// top-level variables (globals)
 	private Binding[string] globals;
@@ -186,6 +210,7 @@ class SemanticAnalyzer {
 	private bool[string] installedModules;
 	private ExportSymbol[string] importedFns;
 	private ExportSymbol[string] importedTypes;
+	private ProviderFn[string] providerFns;
 	private TypeNode currentReturn;
 	private bool hasCurrentReturn;
 	private string currentFunctionName;
@@ -200,9 +225,10 @@ class SemanticAnalyzer {
 		return null;
 	}
 
-	void analyzeModule(Program prog, string moduleName, string sourcePath, SemanticErrorCollector errs, ImportView view = ImportView.init) {
+	void analyzeModule(Program prog, string moduleName, string sourcePath, SemanticErrorCollector errs, ImportView view = ImportView.init, CheckedProviderFn[] checkedProviders = null) {
 		if (prog is null) return;
 		installImportView(view);
+		installProviders(checkedProviders, sourcePath, errs);
 		// Pass 1: collect functions and globals
 		foreach (s; prog.statements) {
 			if (auto f = cast(FunctionDeclaration)s) {
@@ -237,6 +263,10 @@ class SemanticAnalyzer {
 			TypeNode t = sym.status == ExportStatus.concrete ? sym.type : TypeNode.unknownType();
 			env.define(name, t, sym.mutable);
 		}
+		foreach (name, pd; protocols) {
+			foreach (ms; pd.methods)
+				checkParameterDefaults(ms.parameters, "protocol method '" ~ ms.name ~ "'", sourcePath, errs, env, 0);
+		}
 		foreach (s; prog.statements) {
 			visitStmt(s, sourcePath, errs, env, 0);
 		}
@@ -247,7 +277,9 @@ class SemanticAnalyzer {
 		agg.isFrame = false;
 		foreach (fd; st.fields) {
 			agg.fields[fd.name] = FieldSymbol(resolveDeclared(declaredNode(fd.typeNode, fd.type, fd.customTypeName)), false);
+			agg.fieldOrder ~= fd.name;
 		}
+		foreach (m; st.methods) agg.methods[m.name] = methodSymbol(m, false);
 		aggregates[st.name] = agg;
 	}
 
@@ -256,25 +288,27 @@ class SemanticAnalyzer {
 		agg.isFrame = true;
 		foreach (fd; fr.fields) {
 			agg.fields[fd.name] = FieldSymbol(resolveDeclared(declaredNode(fd.typeNode, fd.type, fd.customTypeName)), fd.isMutable);
+			agg.fieldOrder ~= fd.name;
 		}
-		bool[string] direct;
+		agg.mutatingMethods = mutatingMethodsOf(fr.methods);
 		foreach (m; fr.methods) {
-			if (methodAssignsThis(m)) direct[m.name] = true;
+			bool mut = (m.name in agg.mutatingMethods) !is null;
+			agg.methods[m.name] = methodSymbol(m, mut);
 		}
-		bool[string] mut = direct;
-		bool changed = true;
-		while (changed) {
-			changed = false;
-			foreach (m; fr.methods) {
-				if (m.name in mut) continue;
-				if (methodCallsMutatingThis(m, mut)) {
-					mut[m.name] = true;
-					changed = true;
-				}
-			}
-		}
-		agg.mutatingMethods = mut;
 		aggregates[fr.name] = agg;
+	}
+
+	private MethodSymbol methodSymbol(MethodDeclaration m, bool mutating) {
+		MethodSymbol ms;
+		ms.mutating = mutating;
+		ms.returnType = resolveDeclared(declaredNode(m.returnTypeNode, m.returnType, null));
+		foreach (p; m.parameters) {
+			Parameter q = p;
+			q.typeNode = resolveDeclared(declaredNode(p.typeNode, p.type, p.customTypeName));
+			q.type = q.typeNode.base;
+			ms.parameters ~= q;
+		}
+		return ms;
 	}
 
 	// Simple scope chain. Mutability lives on the binding, next to its type.
@@ -325,14 +359,19 @@ class SemanticAnalyzer {
 			return;
 		}
 		if (auto sd = cast(StructDeclaration)s) {
+			foreach (fd; sd.fields)
+				checkFieldDefault(fd.name, declaredNode(fd.typeNode, fd.type, fd.customTypeName), fd.defaultValue, sourcePath, errs, env, depth + 1);
 			foreach (m; sd.methods) visitMethod(m, sd.name, false, sourcePath, errs, env, depth + 1);
 			return;
 		}
 		if (auto fd = cast(FrameDeclaration)s) {
+			foreach (field; fd.fields)
+				checkFieldDefault(field.name, declaredNode(field.typeNode, field.type, field.customTypeName), field.initializer, sourcePath, errs, env, depth + 1);
 			foreach (m; fd.methods) visitMethod(m, fd.name, true, sourcePath, errs, env, depth + 1);
 			return;
 		}
 		if (auto f = cast(FunctionDeclaration)s) {
+			checkParameterDefaults(f.parameters, "function '" ~ f.name ~ "'", sourcePath, errs, env, depth + 1);
 			// function body: new scope with params
 			auto child = env.child();
 			foreach (p; f.parameters) {
@@ -613,6 +652,12 @@ class SemanticAnalyzer {
 			if (!skipObject) {
 				ot = visitExpr(me.object, sourcePath, errs, env, depth + 1);
 			}
+			if (ot.present && ot.base == DuendeType.CUSTOM && ot.name.length) {
+				if (auto agg = ot.name in aggregates) {
+					if (auto ms = me.method in agg.methods)
+						return checkKnownMethod(me, *agg, *ms, sourcePath, errs, env, depth + 1);
+				}
+			}
 			bool checkedArg = false;
 			if (me.method == "add" && ot.base == DuendeType.LIST && ot.args.length && me.arguments.length >= 1) {
 				auto at = visitExpr(me.arguments[0], sourcePath, errs, env, depth + 1, ot.args[0]);
@@ -781,7 +826,23 @@ class SemanticAnalyzer {
 				return assignModuleProperty(mod, pae, sourcePath, errs, env, depth + 1);
 			auto ot = visitExpr(pae.object, sourcePath, errs, env, depth + 1);
 			checkPropertyWrite(pae, ot, sourcePath, errs, env);
-			visitExpr(pae.value, sourcePath, errs, env, depth + 1);
+			TypeNode fieldExpect;
+			bool haveField = false;
+			if (ot.present && ot.base == DuendeType.CUSTOM && ot.name.length) {
+				if (auto agg = ot.name in aggregates) {
+					if (auto field = pae.property in agg.fields) {
+						fieldExpect = field.type;
+						haveField = true;
+					}
+				}
+			}
+			auto rhs = visitExpr(pae.value, sourcePath, errs, env, depth + 1, fieldExpect);
+			if (haveField && !typeCompatible(fieldExpect, rhs)) {
+				errs.addError(
+					"Assigned expression type does not match field '" ~ pae.property ~ "' (need=" ~ typeInfoToString(fieldExpect) ~ ", got=" ~ typeInfoToString(rhs) ~ ")",
+					getExprPos(pae, sourcePath));
+			}
+			if (haveField) return fieldExpect;
 			return typeInfo(DuendeType.AUTO);
 		}
 		if (auto se = cast(StringInterpolationExpression)e) {
@@ -860,8 +921,24 @@ class SemanticAnalyzer {
 			return typeInfo(DuendeType.INT);
 		}
 		if (auto cc = cast(ConstructorCallExpression)e) {
-			foreach (a; cc.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
-			rejectNamedArguments(cc.argumentNames, cc.arguments, "constructor '" ~ cc.typeName ~ "'", sourcePath, errs);
+			AggregateSymbol* agg = cc.typeName in aggregates;
+			if (agg is null) {
+				if (auto sym = cc.typeName in importedTypes) {
+					if (sym.kind == ExportKind.aggregate && sym.type.name.length)
+						agg = sym.type.name in aggregates;
+				}
+			}
+			if (agg !is null) {
+				if (anyNamed(cc.argumentNames)) {
+					rejectNamedArguments(cc.argumentNames, cc.arguments, "constructor '" ~ cc.typeName ~ "'", sourcePath, errs);
+					foreach (a; cc.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+				} else {
+					checkSignature(cc.typeName, constructorParams(*agg), cc.arguments, cc.argumentNames, cc.position, sourcePath, errs, env, depth + 1);
+				}
+			} else {
+				foreach (a; cc.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+				rejectNamedArguments(cc.argumentNames, cc.arguments, "constructor '" ~ cc.typeName ~ "'", sourcePath, errs);
+			}
 			if (auto sym = cc.typeName in importedTypes) return sym.type;
 			return typeInfo(DuendeType.CUSTOM, cc.typeName);
 		}
@@ -912,6 +989,8 @@ class SemanticAnalyzer {
 	}
 
 	private void visitMethod(MethodDeclaration m, string typeName, bool isFrame, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		string kind = isFrame ? "frame method" : "struct method";
+		checkParameterDefaults(m.parameters, kind ~ " '" ~ m.name ~ "'", sourcePath, errs, env, depth + 1);
 		auto child = env.child();
 		child.define("this", typeInfo(DuendeType.CUSTOM, typeName), isFrame);
 		foreach (p; m.parameters) child.define(p.name, resolveDeclared(declaredNode(p.typeNode, p.type, p.customTypeName)), true);
@@ -993,124 +1072,6 @@ class SemanticAnalyzer {
 		}
 	}
 
-	private bool methodAssignsThis(MethodDeclaration m) {
-		foreach (st; m.body) if (stmtWritesThis(st, null)) return true;
-		return false;
-	}
-
-	private bool methodCallsMutatingThis(MethodDeclaration m, bool[string] mut) {
-		foreach (st; m.body) if (stmtWritesThis(st, mut)) return true;
-		return false;
-	}
-
-	// mut is null when looking for direct field writes. Otherwise also follow this.method calls.
-	private bool stmtWritesThis(Statement s, bool[string] mut) {
-		if (s is null) return false;
-		if (auto vd = cast(VariableDeclaration)s) return exprWritesThis(vd.initializer, mut);
-		if (auto es = cast(ExpressionStatement)s) return exprWritesThis(es.expression, mut);
-		if (auto rs = cast(ReturnStatement)s) return exprWritesThis(rs.value, mut);
-		if (auto ds = cast(DeferStatement)s) return exprWritesThis(ds.call, mut);
-		if (auto ifs = cast(IfStatement)s) {
-			if (exprWritesThis(ifs.condition, mut)) return true;
-			foreach (st; ifs.thenBranch) if (stmtWritesThis(st, mut)) return true;
-			foreach (el; ifs.elifClauses) {
-				if (exprWritesThis(el.condition, mut)) return true;
-				foreach (st; el.body) if (stmtWritesThis(st, mut)) return true;
-			}
-			foreach (st; ifs.elseBranch) if (stmtWritesThis(st, mut)) return true;
-			return false;
-		}
-		if (auto fs = cast(ForStatement)s) {
-			if (exprWritesThis(fs.start, mut) || exprWritesThis(fs.end, mut)) return true;
-			foreach (st; fs.body) if (stmtWritesThis(st, mut)) return true;
-			return false;
-		}
-		if (auto fi = cast(ForInStatement)s) {
-			if (exprWritesThis(fi.iterable, mut)) return true;
-			foreach (st; fi.body) if (stmtWritesThis(st, mut)) return true;
-			return false;
-		}
-		if (auto ws = cast(WhileStatement)s) {
-			if (exprWritesThis(ws.condition, mut)) return true;
-			foreach (st; ws.body) if (stmtWritesThis(st, mut)) return true;
-			return false;
-		}
-		if (auto ms = cast(MatchStatement)s) {
-			if (exprWritesThis(ms.subject, mut)) return true;
-			foreach (c; ms.cases) {
-				if (auto ep = cast(ExpressionPattern)c.pattern) if (exprWritesThis(ep.expr, mut)) return true;
-				if (exprWritesThis(c.guard, mut)) return true;
-				foreach (st; c.body) if (stmtWritesThis(st, mut)) return true;
-			}
-			return false;
-		}
-		if (auto f = cast(FunctionDeclaration)s) {
-			foreach (st; f.body) if (stmtWritesThis(st, mut)) return true;
-		}
-		return false;
-	}
-
-	private bool exprWritesThis(Expression e, bool[string] mut) {
-		if (e is null) return false;
-		if (auto pa = cast(PropertyAssignmentExpression)e) {
-			if (auto ve = cast(VariableExpression)pa.object) {
-				if (ve.name == "this") return true;
-			}
-			return exprWritesThis(pa.object, mut) || exprWritesThis(pa.value, mut);
-		}
-		if (auto ia = cast(IndexAssignmentExpression)e) {
-			return exprWritesThis(ia.object, mut) || exprWritesThis(ia.index, mut) || exprWritesThis(ia.value, mut);
-		}
-		if (auto mc = cast(MethodCallExpression)e) {
-			if (mut !is null) {
-				if (auto ve = cast(VariableExpression)mc.object) {
-					if (ve.name == "this" && (mc.method in mut)) return true;
-				}
-			}
-			if (exprWritesThis(mc.object, mut)) return true;
-			foreach (a; mc.arguments) if (exprWritesThis(a, mut)) return true;
-			return false;
-		}
-		if (auto ae = cast(AssignmentExpression)e) return exprWritesThis(ae.value, mut);
-		if (auto ce = cast(CallExpression)e) {
-			foreach (a; ce.arguments) if (exprWritesThis(a, mut)) return true;
-			return false;
-		}
-		if (auto be = cast(BinaryExpression)e) return exprWritesThis(be.left, mut) || exprWritesThis(be.right, mut);
-		if (auto ue = cast(UnaryExpression)e) return exprWritesThis(ue.operand, mut);
-		if (auto ie = cast(IndexExpression)e) return exprWritesThis(ie.object, mut) || exprWritesThis(ie.index, mut);
-		if (auto pe = cast(PropertyExpression)e) return exprWritesThis(pe.object, mut);
-		if (auto se = cast(StringInterpolationExpression)e) {
-			foreach (ex; se.expressions) if (exprWritesThis(ex, mut)) return true;
-			return false;
-		}
-		if (auto cc = cast(ConstructorCallExpression)e) {
-			foreach (a; cc.arguments) if (exprWritesThis(a, mut)) return true;
-			return false;
-		}
-		if (auto rc = cast(ResultConstructorExpression)e) return exprWritesThis(rc.value, mut);
-		if (auto mc = cast(MaybeConstructorExpression)e) return exprWritesThis(mc.value, mut);
-		if (auto ue = cast(UnwrapExpression)e) return exprWritesThis(ue.result, mut) || exprWritesThis(ue.defaultValue, mut);
-		if (auto ce = cast(CastExpression)e) return exprWritesThis(ce.value, mut);
-		if (auto pe = cast(PanicExpression)e) return exprWritesThis(pe.message, mut);
-		if (auto ll = cast(ListLiteralExpression)e) {
-			foreach (el; ll.elements) if (exprWritesThis(el, mut)) return true;
-		}
-		if (auto dl = cast(DictLiteralExpression)e) {
-			foreach (i, key; dl.keys) if (exprWritesThis(key, mut) || exprWritesThis(dl.values[i], mut)) return true;
-		}
-		if (auto te = cast(TryBlockExpression)e) {
-			foreach (st; te.statements) if (stmtWritesThis(st, mut)) return true;
-		}
-		if (auto me = cast(MatchExpression)e) {
-			if (exprWritesThis(me.subject, mut)) return true;
-			foreach (c; me.cases) {
-				if (auto ep = cast(ExpressionPattern)c.pattern) if (exprWritesThis(ep.expr, mut)) return true;
-				if (exprWritesThis(c.guard, mut) || exprWritesThis(c.value, mut)) return true;
-			}
-		}
-		return false;
-	}
 
 	private void checkConformance(string kind, string typeName, Annotation[] annotations, MethodDeclaration[] methods,
 			string sourcePath, SemanticErrorCollector errs) {
@@ -1295,13 +1256,18 @@ class SemanticAnalyzer {
 		return normalizePos(pos, file);
 	}
 
-	// Methods and constructors are not bound by name yet; reject names instead of silently passing them positionally
+	// Methods and constructors stay positional. A name is reported and is not bound as a positional argument.
 	private void rejectNamedArguments(const string[] names, Expression[] args, string what, string sourcePath, SemanticErrorCollector errs) {
 		foreach (i, an; names) {
 			if (an.length) {
-				errs.addError("Named argument '" ~ an ~ "' is not supported in call to " ~ what ~ ": named arguments are only supported for functions", getExprPos(args[i], sourcePath));
+				errs.addError("Named argument '" ~ an ~ "' is not supported in call to " ~ what ~ ": methods and constructors take positional arguments", getExprPos(args[i], sourcePath));
 			}
 		}
+	}
+
+	private bool anyNamed(const string[] names) {
+		foreach (n; names) if (n.length) return true;
+		return false;
 	}
 
 	// A call name resolves in this order: a variable in scope, a function declared
@@ -1342,13 +1308,16 @@ class SemanticAnalyzer {
 			ce.calleeKind = CalleeKind.builtin;
 			return checkBuiltin(ce, *spec, sourcePath, errs, env, depth);
 		}
+		if (auto pf = ce.name in providerFns) {
+			ce.calleeKind = CalleeKind.provider;
+			checkSignature(ce.name, pf.parameters, ce.arguments, ce.argumentNames, ce.position, sourcePath, errs, env, depth);
+			return pf.result;
+		}
 		ce.calleeKind = CalleeKind.unresolved;
-		// Named arguments are bound against the callee's declared parameters, which are only known
-		// for Duende functions; elsewhere they would be silently passed positionally.
-		// Unresolved names are provider calls and stay unchecked (DU-12).
+		// No readable signature: do not invent one, and do not bind names as positional arguments.
 		foreach (i, an; ce.argumentNames) {
 			if (an.length) {
-				errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': named arguments require a function declared in this module or imported from one", getExprPos(ce.arguments[i], sourcePath));
+				errs.addError("Named argument '" ~ an ~ "' is not supported in call to '" ~ ce.name ~ "': this call has no declared parameter names", getExprPos(ce.arguments[i], sourcePath));
 			}
 		}
 		foreach (arg; ce.arguments) visitExpr(arg, sourcePath, errs, env, depth + 1);
@@ -1499,7 +1468,11 @@ class SemanticAnalyzer {
 		if (sym.kind == ExportKind.function_) importedFns[name] = sym;
 		else if (sym.kind == ExportKind.aggregate || sym.kind == ExportKind.enum_ || sym.kind == ExportKind.protocol) {
 			importedTypes[name] = sym;
-			if (sym.kind == ExportKind.aggregate) installAggregateExport(sym);
+			if (sym.kind == ExportKind.aggregate) {
+				installAggregateExport(sym);
+				if (sym.type.name.length && name != sym.type.name)
+					aggregates[name] = aggregates[sym.type.name];
+			}
 			if (sym.kind == ExportKind.enum_) enums[name] = sym.enumValues.dup;
 		}
 	}
@@ -1508,7 +1481,18 @@ class SemanticAnalyzer {
 		if (!sym.type.name.length) return;
 		AggregateSymbol agg;
 		agg.isFrame = sym.isFrame;
-		foreach (f; sym.fields) agg.fields[f.name] = FieldSymbol(f.type, f.mutable);
+		foreach (f; sym.fields) {
+			agg.fields[f.name] = FieldSymbol(f.type, f.mutable);
+			agg.fieldOrder ~= f.name;
+		}
+		foreach (m; sym.methods) {
+			MethodSymbol ms;
+			ms.parameters = m.parameters;
+			ms.returnType = m.returnType;
+			ms.mutating = m.mutating;
+			agg.methods[m.name] = ms;
+			if (m.mutating) agg.mutatingMethods[m.name] = true;
+		}
 		aggregates[sym.type.name] = agg;
 	}
 
@@ -1587,7 +1571,23 @@ class SemanticAnalyzer {
 			if (sym.status == ExportStatus.concrete) return sym.type;
 			return TypeNode.unknownType();
 		}
-		if (sym.kind == ExportKind.aggregate || sym.kind == ExportKind.enum_) {
+		if (sym.kind == ExportKind.aggregate) {
+			AggregateSymbol* agg;
+			if (sym.type.name.length) agg = sym.type.name in aggregates;
+			if (agg !is null) {
+				if (anyNamed(me.argumentNames)) {
+					rejectNamedArguments(me.argumentNames, me.arguments, "constructor '" ~ me.method ~ "'", sourcePath, errs);
+					foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+				} else {
+					checkSignature(me.method, constructorParams(*agg), me.arguments, me.argumentNames, me.position, sourcePath, errs, env, depth);
+				}
+			} else {
+				foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+				rejectNamedArguments(me.argumentNames, me.arguments, "constructor '" ~ me.method ~ "'", sourcePath, errs);
+			}
+			return sym.type;
+		}
+		if (sym.kind == ExportKind.enum_) {
 			foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
 			rejectNamedArguments(me.argumentNames, me.arguments, "constructor '" ~ me.method ~ "'", sourcePath, errs);
 			return sym.type;
@@ -1618,10 +1618,120 @@ class SemanticAnalyzer {
 		}
 		return t;
 	}
+
+	private void installProviders(CheckedProviderFn[] checked, string sourcePath, SemanticErrorCollector errs) {
+		bool[string] seen;
+		foreach (fn; checked) {
+			if (!fn.understood) {
+				if (fn.raw in seen) continue;
+				seen[fn.raw] = true;
+				errs.addError(
+					"Provider signature was not understood and is not checked: " ~ fn.raw,
+					SourcePosition(fn.line > 0 ? fn.line : 1, fn.column > 0 ? fn.column : 1, sourcePath));
+				continue;
+			}
+			if (!fn.name.length) continue;
+			providerFns[fn.name] = ProviderFn(fn.parameters, fn.result);
+		}
+	}
+
+	private TypeNode checkKnownMethod(MethodCallExpression me, AggregateSymbol agg, MethodSymbol ms, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		if (anyNamed(me.argumentNames)) {
+			rejectNamedArguments(me.argumentNames, me.arguments, "method '" ~ me.method ~ "'", sourcePath, errs);
+			foreach (a; me.arguments) visitExpr(a, sourcePath, errs, env, depth + 1);
+		} else {
+			checkSignature(me.method, ms.parameters, me.arguments, me.argumentNames, me.position, sourcePath, errs, env, depth);
+		}
+		if (agg.isFrame && ms.mutating && receiverIsLet(me.object, env)) {
+			errs.addError(
+				"Cannot call mutating method '" ~ me.method ~ "' on let binding '" ~ receiverName(me.object) ~ "'",
+				getExprPos(me, sourcePath));
+		}
+		return ms.returnType;
+	}
+
+	private Parameter[] constructorParams(AggregateSymbol agg) {
+		Parameter[] ps;
+		foreach (name; agg.fieldOrder) {
+			auto field = name in agg.fields;
+			if (field is null) continue;
+			Parameter p;
+			p.name = name;
+			p.typeNode = field.type;
+			p.type = field.type.base;
+			if (field.type.base == DuendeType.CUSTOM) p.customTypeName = field.type.name;
+			ps ~= p;
+		}
+		return ps;
+	}
+
+	private void checkFieldDefault(string name, TypeNode declared, Expression init, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		if (init is null) return;
+		auto need = resolveDeclared(declared);
+		auto got = visitExpr(init, sourcePath, errs, env, depth + 1, need);
+		if (!typeCompatible(need, got)) {
+			errs.addError(
+				"Default value for field '" ~ name ~ "' has incompatible type (need=" ~ typeInfoToString(need) ~ ", got=" ~ typeInfoToString(got) ~ ")",
+				getExprPos(init, sourcePath));
+		}
+	}
+
+	private void checkParameterDefaults(Parameter[] params, string whereName, string sourcePath, SemanticErrorCollector errs, ref ScopeEnv env, size_t depth) {
+		bool seenDefault = false;
+		foreach (p; params) {
+			auto need = resolveDeclared(declaredNode(p.typeNode, p.type, p.customTypeName));
+			if (p.defaultValue !is null) {
+				seenDefault = true;
+				if (!isConstExpr(p.defaultValue)) {
+					errs.addError(
+						"Default value for parameter '" ~ p.name ~ "' in " ~ whereName ~ " must be a compile-time constant expression (no function calls or non-constant variables).",
+						getExprPos(p.defaultValue, sourcePath));
+				}
+				auto got = visitExpr(p.defaultValue, sourcePath, errs, env, depth + 1, need);
+				if (!typeCompatible(need, got)) {
+					errs.addError(
+						"Default value for parameter '" ~ p.name ~ "' in " ~ whereName ~ " has incompatible type (need=" ~ typeInfoToString(need) ~ ", got=" ~ typeInfoToString(got) ~ ")",
+						getExprPos(p.defaultValue, sourcePath));
+				}
+			} else if (seenDefault) {
+				errs.addError(
+					"Non-default parameter '" ~ p.name ~ "' cannot follow a parameter with a default value in " ~ whereName ~ ".",
+					SourcePosition(1, 1, sourcePath));
+			}
+		}
+	}
+
+	private bool isConstExpr(Expression e) {
+		if (e is null) return false;
+		if (cast(LiteralExpression)e !is null) return true;
+		if (cast(BytesLiteralExpression)e !is null) return true;
+		if (auto s = cast(StringInterpolationExpression)e) return s.expressions.length == 0;
+		if (auto u = cast(UnaryExpression)e) {
+			if (u.operator == "+" || u.operator == "-") return isConstExpr(u.operand);
+			return false;
+		}
+		if (auto b = cast(BinaryExpression)e) {
+			if (b.operator == "+" || b.operator == "-" || b.operator == "*" || b.operator == "/" || b.operator == "%")
+				return isConstExpr(b.left) && isConstExpr(b.right);
+			return false;
+		}
+		if (auto c = cast(CastExpression)e) return isConstExpr(c.value);
+		if (auto rc = cast(ResultConstructorExpression)e) return isConstExpr(rc.value);
+		if (auto mc = cast(MaybeConstructorExpression)e) return mc.value is null || isConstExpr(mc.value);
+		if (auto ll = cast(ListLiteralExpression)e) {
+			foreach (el; ll.elements) if (!isConstExpr(el)) return false;
+			return true;
+		}
+		if (auto dl = cast(DictLiteralExpression)e) {
+			foreach (i, key; dl.keys) if (!isConstExpr(key) || !isConstExpr(dl.values[i])) return false;
+			return true;
+		}
+		return false;
+	}
 }
 
 // Public entrypoint used by the compiler
-void analyzeModule(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector, ImportView view = ImportView.init) {
+void analyzeModule(Program program, string moduleName, string sourcePath, SemanticErrorCollector errorCollector, ImportView view = ImportView.init, CheckedProviderFn[] checkedProviders = null) {
 	auto analyzer = new SemanticAnalyzer();
-	analyzer.analyzeModule(program, moduleName, sourcePath, errorCollector, view);
+	analyzer.analyzeModule(program, moduleName, sourcePath, errorCollector, view, checkedProviders);
 }

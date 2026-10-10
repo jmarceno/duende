@@ -1,0 +1,9 @@
+frame Bag() do
+    var Maybe<int> picked = None
+end
+
+int main() do
+    var Bag bag = Bag(None)
+    bag.picked = Error("x")
+    return 0
+end

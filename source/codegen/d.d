@@ -40,7 +40,10 @@ class DCodeGenerator : CodeGenerator {
     // Optional function/method signature registry to support named-args reordering at call sites
     private Parameter[][string] functionSignatures; // name -> params
     private Parameter[][string] importedSignatures; // imported and qualified calls
-    private Parameter[][string] methodSignatures;   // Type.method -> params (future)
+    private Parameter[][string] methodSignatures;   // Type.method -> params
+    private Parameter[][string] constructorSignatures; // Type -> fields in constructor order
+    private Parameter[string] fieldSignatures; // Type.field -> field
+    private string currentAggregate;
     // When emitting module-level globals, defer non-constant initializers to run inside main
     private struct DeferredInit { string name; string expr; int pos; }
     private DeferredInit[] deferredGlobalInits;
@@ -59,6 +62,38 @@ class DCodeGenerator : CodeGenerator {
 
     void noteImportedSignature(string name, Parameter[] parameters) {
         importedSignatures[name] = parameters;
+    }
+
+    void noteMethodSignature(string key, Parameter[] parameters) {
+        methodSignatures[key] = parameters;
+    }
+
+    void noteConstructorSignature(string name, Parameter[] fields) {
+        constructorSignatures[name] = fields;
+    }
+
+    void noteFieldSignature(string key, Parameter field) {
+        fieldSignatures[key] = field;
+    }
+
+    private void noteLocalAggregate(string name, Parameter[] fields, MethodDeclaration[] methods) {
+        constructorSignatures[name] = fields;
+        foreach (f; fields) fieldSignatures[name ~ "." ~ f.name] = f;
+        foreach (m; methods) methodSignatures[name ~ "." ~ m.name] = m.parameters;
+    }
+
+    private Parameter[] frameFieldsAsParams(VariableDeclaration[] fields) {
+        Parameter[] ps;
+        foreach (fd; fields) {
+            Parameter p;
+            p.name = fd.name;
+            p.type = fd.type;
+            p.typeNode = fd.typeNode;
+            p.customTypeName = fd.customTypeName;
+            p.innerType = fd.innerType;
+            ps ~= p;
+        }
+        return ps;
     }
 
     // Mix in all the modular functionality
@@ -150,6 +185,10 @@ class DCodeGenerator : CodeGenerator {
                 }
                 // Record function signatures for potential named-arg mapping
                 functionSignatures[funcDecl.name] = funcDecl.parameters;
+            } else if (auto st = cast(StructDeclaration)stmt) {
+                noteLocalAggregate(st.name, st.fields, st.methods);
+            } else if (auto fr = cast(FrameDeclaration)stmt) {
+                noteLocalAggregate(fr.name, frameFieldsAsParams(fr.fields), fr.methods);
             }
         }
 

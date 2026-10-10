@@ -499,6 +499,7 @@ enum CalleeKind {
     builtin,
     notAFunction,
     value,
+    provider,
     unresolved
 }
 

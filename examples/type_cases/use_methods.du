@@ -1,0 +1,74 @@
+struct Row() do
+    let list<int> cells = [0]
+    let Result<int> mark = Ok(0)
+
+    Row grow(list<int> extra, Result<int> mark = Ok(1)) do
+        return Row(extra, mark)
+    end
+end
+
+frame Bag() do
+    var list<string> items = []
+    var Maybe<int> picked = None
+    var int held = 0
+
+    int count() do
+        return len(this.items)
+    end
+
+    void put(list<string> more, Maybe<int> choice) do
+        this.items = more
+        this.held = choice ? else 0
+    end
+end
+
+int labeled(Result<int> r = Ok(4), list<int> xs = [1, 2]) do
+    let int n = r ? else 0
+    return n + xs[0]
+end
+
+int missing(Maybe<int> m = None) do
+    return m ? else 8
+end
+
+var string trace = ""
+
+int noteInt(string tag, int value) do
+    trace = "${trace}${tag}"
+    return value
+end
+
+Bag make() do
+    trace = "${trace}r"
+    return Bag([], None, 0)
+end
+
+int main() do
+    let Row row = Row([1, 2], Error("e"))
+    match row.mark do
+        Ok(n) -> print(n)
+        Error(e) -> print(e)
+    end
+    let Row grown = row.grow([4])
+    print(grown.cells[0])
+    match grown.mark do
+        Ok(n) -> print(n)
+        Error(e) -> print(e)
+    end
+    print(labeled())
+    print(missing())
+    var Bag shown = Bag(["a", "b"], Some(noteInt("a", 2)), 0)
+    print(shown.count())
+    let int picked = shown.picked ? else 0
+    print(picked)
+    shown.picked = None
+    let int cleared = shown.picked ? else 6
+    print(cleared)
+    var Bag bag = make()
+    bag.put(["z"], Some(noteInt("b", 1)))
+    print(bag.held)
+    print(trace)
+    make().put(["q"], Some(noteInt("c", 3)))
+    print(trace)
+    return 0
+end

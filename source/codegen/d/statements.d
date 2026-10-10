@@ -517,17 +517,25 @@ mixin template DStatementsMixin() {
             result ~= ") {\n";
             indentLevel++;
             foreach (field; structDecl.fields) {
-                result ~= indent() ~ "this." ~ field.name ~ " = " ~ field.name ~ ";\n";
+                // A struct field is immutable storage. A list or byte buffer is copied
+                // so the mutable slice passed to the constructor can be stored.
+                string rhs = field.name;
+                if (field.type == DuendeType.LIST || field.type == DuendeType.BYTES)
+                    rhs ~= ".idup";
+                result ~= indent() ~ "this." ~ field.name ~ " = " ~ rhs ~ ";\n";
             }
             indentLevel--;
             result ~= indent() ~ "}\n";
         }
 
         // Generate methods
+        string prevAggregate = currentAggregate;
+        currentAggregate = structDecl.name;
         foreach (method; structDecl.methods) {
             result ~= "\n";
             result ~= generateMethodDeclaration(method, true); // true = for struct (const methods)
         }
+        currentAggregate = prevAggregate;
 
         // Generate default implementations from protocols via mixins
         if (structDecl.annotations) {
@@ -600,10 +608,13 @@ mixin template DStatementsMixin() {
         }
 
         // Generate methods
+        string prevAggregate = currentAggregate;
+        currentAggregate = frameDecl.name;
         foreach (method; frameDecl.methods) {
             result ~= "\n";
             result ~= generateMethodDeclaration(method, false); // false = for frame (non-const methods)
         }
+        currentAggregate = prevAggregate;
 
         // Generate default implementations from protocols via mixins
         if (frameDecl.annotations) {
@@ -807,9 +818,18 @@ mixin template DStatementsMixin() {
         result ~= " {\n";
         indentLevel++;
 
+        bool hadThis = ("this" in variableTypes) !is null;
+        VarInfo prevThis;
+        if (hadThis) prevThis = variableTypes["this"];
+        if (currentAggregate.length) {
+            TypeNode node = TypeNode.of(DuendeType.CUSTOM, currentAggregate);
+            variableTypes["this"] = VarInfo(DuendeType.CUSTOM, currentAggregate, DuendeType.VOID, null, currentAggregate, node);
+        }
         foreach (stmt; methodDecl.body) {
             result ~= generateStatement(stmt);
         }
+        if (hadThis) variableTypes["this"] = prevThis;
+        else if (currentAggregate.length) variableTypes.remove("this");
 
         indentLevel--;
         result ~= indent() ~ "}\n";
