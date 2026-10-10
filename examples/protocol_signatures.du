@@ -1,0 +1,61 @@
+import protocol_cases.lib { DataStore }
+
+protocol LocalContract do
+  int size(list<Maybe<int>> values)
+  string label(string name = "contract")
+end
+
+@Implements(LocalContract)
+struct LocalValues() do
+  int size(list<Maybe<int>> values) do
+    return values.length
+  end
+
+  string label(string name = "local") do
+    return name
+  end
+end
+
+@Implements(DataStore)
+frame Store() do
+  var int totalValue = 0
+
+  int count(list<Maybe<int>> values) do
+    return values.length
+  end
+
+  Result<string> lookup(dict<string, Maybe<int>> values, string key = "value") do
+    return Ok(key)
+  end
+
+  Maybe<int> first(list<Result<Maybe<int>>> values) do
+    if values.length == 0 do
+      return None
+    end
+    return values[0] ? else None
+  end
+
+  void add(int amount) do
+    this.totalValue = this.totalValue + amount
+  end
+
+  int total() do
+    return this.totalValue
+  end
+end
+
+int main() do
+  let LocalValues local = LocalValues()
+  print(local.size([Some(1), None]))
+  print(local.label())
+
+  var Store store = Store(0)
+  print(store.count([Some(1), None]))
+  let dict<string, Maybe<int>> entries = {"value": Some(8)}
+  print(store.lookup(entries) ? else "missing")
+  print(store.first([Ok(Some(9))]) ? else -1)
+  print(store.source())
+  store.add(4)
+  print(store.total())
+  return 0
+end

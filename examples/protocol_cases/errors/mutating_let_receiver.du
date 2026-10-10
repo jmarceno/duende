@@ -1,0 +1,18 @@
+protocol Incrementable do
+  void increment(int amount)
+end
+
+@Implements(Incrementable)
+frame Counter() do
+  var int value = 0
+
+  void increment(int amount) do
+    this.value = this.value + amount
+  end
+end
+
+int main() do
+  let Counter counter = Counter(0)
+  counter.increment(1)
+  return 0
+end

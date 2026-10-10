@@ -1078,19 +1078,81 @@ class SemanticAnalyzer {
 		foreach (ann; annotations) {
 			if (ann.name != "Implements") continue;
 			foreach (protoName; ann.arguments) {
-				auto pd = protoName in protocols;
-				if (pd is null) continue; // declared in another module; the D compiler still checks it
-				foreach (sig; (*pd).methods) {
-					if (sig.hasDefaultImplementation) continue;
-					bool found = false;
-					foreach (m; methods) {
-						if (m.name == sig.name && m.parameters.length == sig.parameters.length) { found = true; break; }
+				if (auto pd = protoName in protocols) {
+					foreach (sig; (*pd).methods) {
+						checkMethodConformance(kind, typeName, protoName, sig.name,
+							resolveDeclared(declaredNode(sig.returnTypeNode, sig.returnType)), sig.parameters,
+							sig.hasDefaultImplementation, methods, sourcePath, errs);
 					}
-					if (!found) {
-						errs.addError(kind ~ " '" ~ typeName ~ "' implements protocol '" ~ protoName ~ "' but does not define method '" ~ sig.name ~ "' with " ~ sig.parameters.length.to!string ~ " parameter(s)",
-							SourcePosition(1, 1, sourcePath));
+					continue;
+				}
+				if (auto imported = protoName in importedTypes) {
+					if ((*imported).kind != ExportKind.protocol) continue;
+					foreach (sig; (*imported).methods) {
+						checkMethodConformance(kind, typeName, protoName, sig.name, sig.returnType,
+							sig.parameters, sig.hasDefaultImplementation, methods, sourcePath, errs);
 					}
 				}
+			}
+		}
+	}
+
+	private bool exactProtocolType(TypeNode need, TypeNode got) {
+		if (need.base != got.base || need.args.length != got.args.length) return false;
+		if (need.base == DuendeType.CUSTOM && need.name != got.name) return false;
+		foreach (i, arg; need.args) {
+			if (!exactProtocolType(arg, got.args[i])) return false;
+		}
+		return true;
+	}
+
+	private void checkMethodConformance(string kind, string typeName, string protoName, string methodName,
+			TypeNode expectedReturn, Parameter[] expectedParams, bool hasDefaultImplementation,
+			MethodDeclaration[] methods, string sourcePath, SemanticErrorCollector errs) {
+		MethodDeclaration implementation;
+		foreach (method; methods) {
+			if (method.name == methodName) {
+				implementation = method;
+				break;
+			}
+		}
+		if (implementation is null) {
+			if (!hasDefaultImplementation) {
+				errs.addError(kind ~ " '" ~ typeName ~ "' implements protocol '" ~ protoName ~ "' but does not define method '" ~ methodName ~ "' with " ~ expectedParams.length.to!string ~ " parameter(s)",
+					SourcePosition(1, 1, sourcePath));
+			}
+			return;
+		}
+		if (implementation.parameters.length != expectedParams.length) {
+			errs.addError(kind ~ " '" ~ typeName ~ "' method '" ~ methodName ~ "' has the wrong parameter count for protocol '" ~ protoName ~ "' (need=" ~ expectedParams.length.to!string ~ ", got=" ~ implementation.parameters.length.to!string ~ ")",
+				SourcePosition(1, 1, sourcePath));
+			return;
+		}
+
+		auto actualReturn = resolveDeclared(declaredNode(implementation.returnTypeNode, implementation.returnType));
+		auto needReturn = resolveDeclared(expectedReturn);
+		if (!exactProtocolType(needReturn, actualReturn)) {
+			errs.addError(kind ~ " '" ~ typeName ~ "' method '" ~ methodName ~ "' return type does not match protocol '" ~ protoName ~ "' (need=" ~ needReturn.describe() ~ ", got=" ~ actualReturn.describe() ~ ")",
+				SourcePosition(1, 1, sourcePath));
+		}
+
+		foreach (i, need; expectedParams) {
+			auto got = implementation.parameters[i];
+			if (need.name != got.name) {
+				errs.addError(kind ~ " '" ~ typeName ~ "' method '" ~ methodName ~ "' parameter " ~ (i + 1).to!string ~ " name does not match protocol '" ~ protoName ~ "' (need='" ~ need.name ~ "', got='" ~ got.name ~ "')",
+					SourcePosition(1, 1, sourcePath));
+			}
+			auto needType = resolveDeclared(declaredNode(need.typeNode, need.type, need.customTypeName));
+			auto gotType = resolveDeclared(declaredNode(got.typeNode, got.type, got.customTypeName));
+			if (!exactProtocolType(needType, gotType)) {
+				errs.addError(kind ~ " '" ~ typeName ~ "' method '" ~ methodName ~ "' parameter '" ~ need.name ~ "' type does not match protocol '" ~ protoName ~ "' (need=" ~ needType.describe() ~ ", got=" ~ gotType.describe() ~ ")",
+					SourcePosition(1, 1, sourcePath));
+			}
+			if ((need.defaultValue is null) != (got.defaultValue is null)) {
+				string required = need.defaultValue is null ? "required" : "defaulted";
+				string actual = got.defaultValue is null ? "required" : "defaulted";
+				errs.addError(kind ~ " '" ~ typeName ~ "' method '" ~ methodName ~ "' parameter '" ~ need.name ~ "' default does not match protocol '" ~ protoName ~ "' (need=" ~ required ~ ", got=" ~ actual ~ ")",
+					SourcePosition(1, 1, sourcePath));
 			}
 		}
 	}

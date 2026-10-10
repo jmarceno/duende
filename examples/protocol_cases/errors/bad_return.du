@@ -1,0 +1,10 @@
+protocol TypedResult do
+  Result<Maybe<int>> make()
+end
+
+@Implements(TypedResult)
+struct BadResult() do
+  Maybe<int> make() do
+    return None
+  end
+end

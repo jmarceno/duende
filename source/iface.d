@@ -34,6 +34,7 @@ struct ExportMethod {
     Parameter[] parameters;
     TypeNode returnType;
     bool mutating;
+    bool hasDefaultImplementation;
 }
 
 struct ExportSymbol {
@@ -148,6 +149,14 @@ ModuleInterface declaredInterface(string moduleName, string sourcePath, Program 
             sym.kind = ExportKind.protocol;
             sym.status = ExportStatus.concrete;
             sym.type = TypeNode.of(DuendeType.CUSTOM, moduleName ~ "." ~ pr.name);
+            foreach (method; pr.methods) {
+                ExportMethod em;
+                em.name = method.name;
+                em.returnType = qualify(declared(method.returnTypeNode, method.returnType), moduleName, localTypes);
+                foreach (p; method.parameters) em.parameters ~= copyParam(p, moduleName, localTypes);
+                em.hasDefaultImplementation = method.hasDefaultImplementation;
+                sym.methods ~= em;
+            }
             iface.symbols[pr.name] = sym;
         }
     }

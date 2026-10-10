@@ -847,6 +847,30 @@ class ModuleGraph {
                 }
             }
 
+            // Protocol default implementations are emitted as sibling mixin templates.
+            // Re-export aliases beside selective/wildcard protocol aliases so an
+            // imported protocol can supply its default methods to a local type.
+            if (auto importedModule = mod in modules) {
+                foreach (stmt; importedModule.program.statements) {
+                    auto protocolDecl = cast(ProtocolDeclaration)stmt;
+                    if (protocolDecl is null) continue;
+                    string localProtocolName;
+                    if (imp.isWildcard) {
+                        localProtocolName = protocolDecl.name;
+                    } else {
+                        foreach (item; imp.items) {
+                            if (item.name == protocolDecl.name) {
+                                localProtocolName = item.localAlias.length ? item.localAlias : item.name;
+                                break;
+                            }
+                        }
+                    }
+                    if (!localProtocolName.length) continue;
+                    aliasLines ~= "alias " ~ localProtocolName ~ "_DefaultImpls = " ~ shortName ~ "." ~ protocolDecl.name ~ "_DefaultImpls;";
+                    aliasLines ~= "alias " ~ localProtocolName ~ "_FrameDefaultImpls = " ~ shortName ~ "." ~ protocolDecl.name ~ "_FrameDefaultImpls;";
+                }
+            }
+
             // If the imported module re-exports other modules publicly, bridge their
             // aliases into this module so `mod1` can be referenced directly if
             // `mod2` does `public import mod1`.

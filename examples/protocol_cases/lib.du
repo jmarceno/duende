@@ -1,0 +1,11 @@
+protocol DataStore do
+  int count(list<Maybe<int>> values)
+  Result<string> lookup(dict<string, Maybe<int>> values, string key = "contract")
+  Maybe<int> first(list<Result<Maybe<int>>> values)
+  void add(int amount)
+  int total()
+
+  string source() do
+    return "library"
+  end
+end

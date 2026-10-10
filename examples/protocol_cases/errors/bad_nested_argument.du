@@ -1,0 +1,9 @@
+protocol TypedInput do
+  void consume(dict<string, list<Maybe<int>>> values)
+end
+
+@Implements(TypedInput)
+struct BadInput() do
+  void consume(dict<string, list<Result<int>>> values) do
+  end
+end

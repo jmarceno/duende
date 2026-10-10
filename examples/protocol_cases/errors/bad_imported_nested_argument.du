@@ -1,0 +1,26 @@
+import protocol_cases.lib { DataStore }
+
+@Implements(DataStore)
+frame BadImportedStore() do
+  var int totalValue = 0
+
+  int count(list<Result<int>> values) do
+    return values.length
+  end
+
+  Result<string> lookup(dict<string, Maybe<int>> values, string key = "local") do
+    return Ok(key)
+  end
+
+  Maybe<int> first(list<Result<Maybe<int>>> values) do
+    return None
+  end
+
+  void add(int amount) do
+    this.totalValue = this.totalValue + amount
+  end
+
+  int total() do
+    return this.totalValue
+  end
+end

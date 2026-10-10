@@ -1080,6 +1080,7 @@ class Parser {
             } else if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                           TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
                           TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
+                          TokenType.RESULT, TokenType.MAYBE,
                           TokenType.IDENTIFIER)) {
                 methods ~= cast(MethodDeclaration)methodDeclaration();
             }
@@ -1117,6 +1118,7 @@ class Parser {
             } else if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                           TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
                           TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
+                          TokenType.RESULT, TokenType.MAYBE,
                           TokenType.IDENTIFIER)) {
                 methods ~= cast(MethodDeclaration)methodDeclaration();
             }
@@ -1521,7 +1523,8 @@ class Parser {
                 fields ~= field;
             } else if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                      TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
-                     TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE) ||
+                     TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
+                     TokenType.RESULT, TokenType.MAYBE) ||
                 check(TokenType.IDENTIFIER)) {
 
                 if (isMethodDeclaration()) {
@@ -1567,7 +1570,8 @@ class Parser {
                 fields ~= cast(VariableDeclaration)variableDeclarationWithContext(true); // Frame fields are local scope
             } else if (check(TokenType.INT_TYPE, TokenType.FLOAT_TYPE, TokenType.STRING_TYPE,
                             TokenType.BOOL_TYPE, TokenType.BYTES_TYPE, TokenType.VOID_TYPE,
-                            TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE) ||
+                            TokenType.LIST_TYPE, TokenType.DICT_TYPE, TokenType.AUTO_TYPE,
+                            TokenType.RESULT, TokenType.MAYBE) ||
                       check(TokenType.IDENTIFIER)) {
 
                 if (isMethodDeclaration()) {

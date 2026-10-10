@@ -1,0 +1,9 @@
+protocol OptionalArgument do
+  void set(int value = 1)
+end
+
+@Implements(OptionalArgument)
+struct MissingDefault() do
+  void set(int value) do
+  end
+end

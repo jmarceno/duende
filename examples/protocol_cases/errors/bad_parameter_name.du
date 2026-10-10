@@ -1,0 +1,9 @@
+protocol NamedArgument do
+  void set(int value)
+end
+
+@Implements(NamedArgument)
+struct BadName() do
+  void set(int amount) do
+  end
+end
